@@ -1,0 +1,1076 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HERRAMIENTAS DE REGISTRO – SERVICIO DE EMERGENCIAS HLA</title>
+  <style>
+    :root{--azul-900:#0b3a6a;--azul-800:#114a84;--azul-700:#165ea8;--azul-600:#1e76d0;--azul-100:#eaf3ff;--borde:#e5e7eb;--texto:#0f2647}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,var(--azul-100),#fff 60%);color:var(--texto);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    header.app{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(135deg,var(--azul-900),var(--azul-700));color:#fff;border-bottom:1px solid rgba(0,0,0,.06)}
+    .brand{display:flex;gap:10px;align-items:center}
+    .brand h1{font-size:16px;margin:0}
+    .global-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .global-controls select{padding:6px 10px;border-radius:8px;border:1px solid #bdd0ff;background:#fff;color:#0f2647;font-weight:600}
+    .wrapper{max-width:1280px;margin:18px auto;padding:0 18px}
+
+    /* Tabs */
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    .tabs button{padding:10px 14px;border:1px solid var(--borde);border-radius:10px;background:#fff;cursor:pointer;font-weight:700}
+    .tabs button.active{background:var(--azul-600);border-color:var(--azul-600);color:#fff}
+    .tab-pane{display:none}
+    .tab-pane.active{display:block}
+
+    /* Common cards */
+    .sheet{max-width:1200px;margin:0 auto;background:#fff;border:1px solid var(--borde);border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(13,51,121,.06)}
+    .sheet header{padding:14px 18px;background:linear-gradient(135deg,var(--azul-900),var(--azul-700));color:#fff;display:flex;justify-content:space-between;align-items:center}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid #e6f3ff;background:linear-gradient(180deg,#f8fbff,#fff)}
+    .btn{padding:6px 10px;border-radius:8px;border:1px solid #cfd9ea;background:#fff;color:#0f2647;font-weight:700;cursor:pointer}
+    .btn.primary{background:var(--azul-600);color:#fff;border-color:var(--azul-600)}
+    .btn.ghost{background:#fff;border-color:#cfd9ea}
+
+    /* Timer */
+    table{width:100%;border-collapse:separate;border-spacing:0}
+    thead th{position:sticky;top:0;background:#f0f6ff;color:#0f2647;font-weight:700;border-bottom:2px solid #cfe0ff;padding:10px;text-align:left}
+    tbody td{padding:8px 10px;border-bottom:1px solid #eef6ff;vertical-align:middle}
+    tbody tr:nth-child(odd){background:#f7fbff}
+    tbody tr:nth-child(even){background:#eef6ff}
+    tr.active{background:#eaf6ff !important; outline:2px solid rgba(30,118,208,.08)}
+    tr.finished{background:#e8f9ee !important}
+    input[type=text]{width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;text-transform:uppercase}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+    .chip.pause{color:#fff;background:#c2410c}
+    .chip.egreso{color:#fff;background:#0f8a45}
+    .timer{font-variant-numeric:tabular-nums;font-weight:700}
+    .bottom-actions{display:flex;gap:10px;align-items:center;padding:12px 16px;border-top:1px solid #eef6ff;background:linear-gradient(180deg,#fff,#f8fbff)}
+    .spacer{flex:1}
+
+    /* Inyectables tables */
+    .iny table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+    .iny th,.iny td{padding:.75rem;text-align:center;border-bottom:1px solid #e2e8f0}
+    .iny th{background:#f7fafc;font-weight:600}
+    .iny tbody tr:nth-child(odd) td{background-color:#d6e4ff}
+    .iny tbody tr:nth-child(even) td{background-color:#f0f5ff}
+    .iny tfoot td{font-weight:bold;background:#c3d1ff;border-top:2px solid #a1b2e8}
+    .iny button{padding:.25rem .5rem;margin:0 .25rem;border:none;border-radius:6px;cursor:pointer;font-size:.9rem;user-select:none;transition:background-color .3s ease}
+    .iny button.increment{background:#3182ce;color:#fff}
+    .iny button.increment:hover{background:#2c6cb0}
+    .iny button.decrement{background:#63b3ed;color:#fff}
+    .iny button.decrement:hover{background:#4299e1}
+
+    /* Cuadro44 calendar header numbers */
+    .c44-scroll{overflow:auto}
+    .note{font-size:12px;color:#375585}
+
+    @media (max-width:900px){
+      .global-controls{width:100%}
+      .tabs{position:sticky;top:54px;background:linear-gradient(180deg,var(--azul-100),#fff);padding:8px 0;z-index:4}
+    }
+
+    @media print{header.app,.tabs,.note,.toolbar,.bottom-actions{display:none} header{background:#fff!important;color:#000!important;border-bottom:1px solid #ddd!important}}
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <header class="app">
+    <div class="brand">
+      <span>🏥</span>
+      <h1>HERRAMIENTAS DE REGISTRO – SERVICIO DE EMERGENCIAS HLA</h1>
+    </div>
+    <div class="global-controls">
+      <label>Fecha: <strong id="gc_fecha"></strong></label>
+      <label>Turno:
+        <select id="gc_turno">
+          <option value="T1">T1</option>
+          <option value="T2">T2</option>
+          <option value="T3">T3</option>
+        </select>
+      </label>
+      <label>Rol:
+        <select id="gc_rol">
+          <option value="enfermera">Enfermera</option>
+          <option value="auxiliar">Auxiliar</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <div class="wrapper">
+    <div class="tabs" id="tabs"></div>
+
+    <!-- HOME -->
+    <section id="pane-HOME" class="tab-pane active">
+      <div class="sheet">
+        <header><h2 style="margin:0">Bienvenido</h2><div>HLA · Emergencias</div></header>
+        <div style="padding:22px">
+          <h1 style="text-align:center;margin:14px 0 6px">HERRAMIENTAS DE REGISTRO SERVICIO DE EMERGENCIAS HLA</h1>
+          <p style="text-align:center;color:#375585">Usa las pestañas superiores para ingresar registros. Todo queda sincronizado y el Cuadro 44 se llena automáticamente por día.</p>
+          <p class="note">Consejo: antes de iniciar el turno, verifica <b>Turno</b> y <b>Rol</b> en la barra superior.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SILLAS: Timer + Inyectables(SILLAS→IV) -->
+    <section id="pane-SILLAS" class="tab-pane"></section>
+
+    <!-- SILLONES -->
+    <section id="pane-SILLONES" class="tab-pane"></section>
+
+    <!-- OBSERVACION -->
+    <section id="pane-OBSERVACION" class="tab-pane"></section>
+
+    <!-- CUNAS -->
+    <section id="pane-CUNAS" class="tab-pane"></section>
+
+    <!-- TRANSITORIAS -->
+    <section id="pane-TRANSITORIAS" class="tab-pane"></section>
+
+    <!-- TRIAGE -->
+    <section id="pane-TRIAGE" class="tab-pane"></section>
+
+    <!-- INYECTABLES (→ IM) -->
+    <section id="pane-TRATAMIENTOS" class="tab-pane"></section>
+
+    <!-- CUADRO44 (mensual, calculado) -->
+    <section id="pane-CUADRO44" class="tab-pane"></section>
+
+    <p class="note">Cada módulo está aislado por IDs con prefijo para evitar choques. El estado se guarda por mes en localStorage.</p>
+  </div>
+
+<script>
+(function(){
+  // ==========================
+  // UTILIDADES / STORE GLOBAL
+  // ==========================
+  const $ = (sel,root=document)=>root.querySelector(sel);
+  const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm   = String(today.getMonth()+1).padStart(2,'0');
+  const dd   = String(today.getDate()).padStart(2,'0');
+  const DATE_KEY = `${yyyy}-${mm}-${dd}`;
+  const MONTH_KEY = `${yyyy}-${mm}`;
+  const LS_KEY = (k)=>`HLA_STORE_${MONTH_KEY}_${k||''}`;
+
+  const PROCEDIMIENTOS_DEF = [
+    // principales usados en tus herramientas
+    "Administración de Medicamento Vía Intramuscular",
+    "Administracion de medicamentos via intravenosa",
+    "Administracion de medicamentos via oral",
+    "Administracion de medicamentos via Subcutanea",
+    "Canalización de via periferica",
+    "Retiro de via periferica",
+    "Cambiar via periferica",
+    "Toma de Signos Vitales",
+    "Curva Febril",
+    "Oximetría de Pulso",
+    "Toma de Presión Arterial",
+    "Medir Frecuencia Cardíaca",
+    "Medir Frecuencia Respiratoria",
+    "Medidas Antropométricas",
+    "Educación",
+    // otros del Cuadro 44 legado (extensible)
+    "Aseo Genital","Cuidados Higienicos","Movilidad Pasiva","Realizar baño en cama","Vestir diferentes tipos de cama",
+    "Aplicación de Hidrocoloides","Aplicación de otro vendaje de presión","Cambio de Vendaje","Colocación de Vendajes","Colocación Venda Elástica",
+    "Curación de Quemadura","Curaciones","Frotis y Cultivos","Toma de Muestras"
+  ];
+
+  function daysInMonth(y,m){return new Date(y, m, 0).getDate();}
+  const DAYS_THIS_MONTH = daysInMonth(yyyy, parseInt(mm,10));
+
+  // Estado base por mes
+  function baseCuadro44(){
+    const obj={};
+    PROCEDIMIENTOS_DEF.forEach(p=>{obj[p]=Array(DAYS_THIS_MONTH).fill(0)});
+    return obj;
+  }
+
+  const Store = {
+    meta: {
+      fechaHoy: DATE_KEY,
+      turno: 'T1',
+      rol: 'enfermera'
+    },
+    timers: {SILLAS:[], SILLONES:[], OBSERVACION:[], CUNAS:[], TRANSITORIAS:[]},
+    triage: {T1: Array(8).fill(0), T2: Array(8).fill(0), T3: Array(8).fill(0)},
+    inyectables: {
+      SILLAS: { meds:["Dexametasona","Clorfenamina","Buscapina","Cimetidina","Tramal","Voltaren","Plasil","Laxis"], counts:[] },
+      TRATAMIENTOS: { meds:["Dexametasona","Clorfenamina","Buscapina","Cimetidina","Tramal","Voltaren","Plasil","Laxis"], counts:[] }
+    },
+    cuadro44: baseCuadro44()
+  };
+
+  function turnoKey(){
+    return Store.meta.turno;
+  }
+
+  function loadStore(){
+    try{
+      const raw = localStorage.getItem(LS_KEY('STORE'));
+      if(!raw) return;
+      const parsed = JSON.parse(raw);
+      if(parsed && parsed.meta){
+        if((parsed.meta.fechaHoy||'').slice(0,7)!==MONTH_KEY){
+          localStorage.removeItem(LS_KEY('STORE'));
+          return;
+        }
+      }
+      Object.assign(Store, parsed);
+    }catch{}
+  }
+
+  function saveStore(){
+    try{ localStorage.setItem(LS_KEY('STORE'), JSON.stringify(Store)); }catch{}
+    updateGC();
+  }
+
+  function normName(name){
+    return (name||'').replaceAll('ó','o').replaceAll('í','i').replaceAll('ú','u').replaceAll('é','e').replaceAll('á','a')
+      .replaceAll('Ó','O').replaceAll('Í','I').replaceAll('Ú','U').replaceAll('É','E').replaceAll('Á','A');
+  }
+
+  const NAME_MAP = {
+    'administracion de medicamento via intramuscular': 'Administración de Medicamento Vía Intramuscular',
+    'administracion de medicamentos via intravenosa': 'Administracion de medicamentos via intravenosa'
+  };
+
+  function mapToC44(name){
+    const keyLower = normName(name).toLowerCase();
+    const n1 = NAME_MAP[keyLower] || name;
+    if(!Store.cuadro44[n1]){ Store.cuadro44[n1] = Array(DAYS_THIS_MONTH).fill(0); }
+    return n1;
+  }
+
+  function dayIndexFromDateStr(str){
+    const d = parseInt(str.slice(8,10),10);
+    return Math.max(1,Math.min(DAYS_THIS_MONTH,d)) - 1;
+  }
+
+  function addProcedure({nombre, fecha=Store.meta.fechaHoy, delta=1}){
+    const key = mapToC44(nombre);
+    const di = dayIndexFromDateStr(fecha);
+    const curr = Store.cuadro44[key][di]||0;
+    Store.cuadro44[key][di] = Math.max(0, curr + delta);
+    saveStore();
+  }
+
+  // ---------------
+  // UI – pestañas
+  // ---------------
+  const TABS = [
+    {id:'HOME', label:'🏠 Home'},
+    {id:'SILLAS', label:'🪑 Sillas'},
+    {id:'SILLONES', label:'🛋️ Sillones'},
+    {id:'OBSERVACION', label:'👀 Observación'},
+    {id:'CUNAS', label:'👶 Cunas'},
+    {id:'TRANSITORIAS', label:'🔁 Transitorias'},
+    {id:'TRIAGE', label:'🚥 Triage'},
+    {id:'TRATAMIENTOS', label:'💉 Inyectables'},
+    {id:'CUADRO44', label:'📊 Cuadro44'}
+  ];
+
+  function buildTabs(){
+    const frag = document.createDocumentFragment();
+    TABS.forEach((t,i)=>{
+      const b=document.createElement('button');
+      b.textContent=t.label; b.dataset.pane=`pane-${t.id}`;
+      if(i===0) b.classList.add('active');
+      b.addEventListener('click',()=>{
+        $$('#tabs button').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');
+        $$('.tab-pane').forEach(p=>p.classList.remove('active'));
+        $(`#pane-${t.id}`).classList.add('active');
+      });
+      frag.appendChild(b);
+    });
+    $('#tabs').appendChild(frag);
+  }
+
+  // -----------------
+  // COMPONENTE TIMER
+  // -----------------
+  function TimerComponent({mountId, areaId}){
+    const mount = document.getElementById(mountId);
+    mount.innerHTML = `
+      <div class="sheet">
+        <header><h2 style="margin:0">REGISTRO – ${areaId}</h2><div>Fecha: <span data-f="fecha"></span></div></header>
+        <div class="toolbar">
+          <button class="btn ghost" data-f="endShift">📝 Descargar PDF</button>
+          <div class="spacer"></div>
+          <div class="total">Total acumulado: <span data-f="total">00:00:00</span></div>
+        </div>
+        <table><thead><tr>
+          <th style="width:48px">N°</th>
+          <th style="min-width:220px">Nombre y Apellidos</th>
+          <th style="min-width:220px">Diagnóstico</th>
+          <th style="width:70px">R/S</th>
+          <th style="width:110px">Ingreso</th>
+          <th style="width:110px">Salida</th>
+          <th style="width:140px">Tiempo (hh:mm:ss)</th>
+          <th style="width:260px">Controles</th>
+        </tr></thead><tbody></tbody></table>
+        <div class="bottom-actions">
+          <div class="spacer"></div>
+          <button class="btn primary" data-f="add">➕ Agregar paciente</button>
+          <button class="btn ghost" data-f="reset">Reiniciar</button>
+        </div>
+      </div>`;
+
+    const state = Store.timers[areaId] = Store.timers[areaId]||[];
+    const tbody = mount.querySelector('tbody');
+    const $fecha = mount.querySelector('[data-f="fecha"]');
+    const $total = mount.querySelector('[data-f="total"]');
+
+    $fecha.textContent = new Date(Store.meta.fechaHoy+'T00:00:00').toLocaleDateString();
+
+    const formatMS = (ms)=>{ if(ms<0) ms=0; const s=Math.floor(ms/1000); const hh=String(Math.floor(s/3600)).padStart(2,'0'); const mm=String(Math.floor((s%3600)/60)).padStart(2,'0'); const ss=String(s%60).padStart(2,'0'); return `${hh}:${mm}:${ss}`; };
+
+    function createState(){ return { index: state.length+1, nombre:'', diagnostico:'', rs:'', ingresos:[], salidas:[], running:false, finalized:false, elapsed:0, lastStart:null }; }
+    function renderIndexAll(){ state.forEach((o,i)=>{ o.index=i+1; const row=tbody.children[i]; if(row) row.querySelector('[data-idx]').textContent=o.index; }); }
+
+    function createRow(o){
+      const tr=document.createElement('tr');
+      tr.innerHTML=
+        `<td data-idx>${o.index}</td>`+
+        `<td><input type="text" data-field="nombre" placeholder="Nombre y apellidos"></td>`+
+        `<td><input type="text" data-field="diagnostico" placeholder="Diagnóstico"></td>`+
+        `<td><input type="text" data-field="rs" placeholder="R/S"></td>`+
+        `<td data-ingreso>-</td>`+
+        `<td data-salida>-</td>`+
+        `<td class="timer" data-timer>00:00:00</td>`+
+        `<td><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">`+
+          `<button class="btn start">Iniciar</button>`+
+          `<button class="btn finish">Finalizar</button>`+
+          `<button class="btn reanudar" style="display:none">Reanudar</button>`+
+          `<span class="chip" data-chip style="display:none"></span>`+
+        `</div></td>`;
+
+      tr.querySelectorAll('input[type=text]').forEach(inp=>{
+        inp.addEventListener('input', ()=>{
+          inp.value=inp.value.toUpperCase();
+          o[inp.dataset.field]=inp.value;
+          saveStore();
+        });
+      });
+
+      const el={
+        idx:tr.querySelector('[data-idx]'),
+        ingreso:tr.querySelector('[data-ingreso]'),
+        salida:tr.querySelector('[data-salida]'),
+        timer:tr.querySelector('[data-timer]'),
+        startBtn:tr.querySelector('.start'),
+        finishBtn:tr.querySelector('.finish'),
+        reanudarBtn:tr.querySelector('.reanudar'),
+        chip:tr.querySelector('[data-chip]')
+      };
+
+      el.startBtn.addEventListener('click',()=>{
+        if(o.finalized) return;
+        if(!o.running){
+          o.running=true;
+          o.lastStart=Date.now();
+          const ts=new Date();
+          o.ingresos.push(ts.toLocaleTimeString());
+          el.ingreso.textContent=o.ingresos[0]||ts.toLocaleTimeString();
+          tr.classList.add('active');
+          tr.classList.remove('finished');
+          el.startBtn.textContent='PAUSA';
+          el.startBtn.classList.remove('start');
+          el.startBtn.classList.add('pause');
+          el.chip.textContent='PAUSA';
+          el.chip.className='chip pause';
+          el.chip.style.display='inline-flex';
+          el.reanudarBtn.style.display='none';
+        } else {
+          o.running=false;
+          if(o.lastStart) o.elapsed+=Date.now()-o.lastStart;
+          o.lastStart=null;
+          el.startBtn.textContent='Iniciar';
+          el.startBtn.classList.remove('pause');
+          el.startBtn.classList.add('start');
+          el.chip.style.display='none';
+        }
+        saveStore();
+      });
+
+      el.finishBtn.addEventListener('click',()=>{
+        if(o.finalized) return;
+        if(o.running){
+          o.elapsed+=Date.now()-o.lastStart;
+          o.running=false;
+          o.lastStart=null;
+        }
+        const ts=new Date();
+        o.salidas.push(ts.toLocaleTimeString());
+        el.salida.textContent=o.salidas[o.salidas.length-1]||ts.toLocaleTimeString();
+        o.finalized=true;
+        tr.classList.remove('active');
+        tr.classList.add('finished');
+        el.chip.textContent='EGRESÓ';
+        el.chip.className='chip egreso';
+        el.chip.style.display='inline-flex';
+        el.startBtn.style.display='none';
+        el.finishBtn.textContent='EGRESÓ';
+        el.finishBtn.classList.add('finished');
+        el.finishBtn.disabled=true;
+        el.reanudarBtn.style.display='inline-flex';
+        saveStore();
+      });
+
+      el.reanudarBtn.addEventListener('click',()=>{
+        o.finalized=false;
+        o.running=true;
+        o.lastStart=Date.now();
+        const ts=new Date();
+        o.ingresos.push(ts.toLocaleTimeString());
+        el.ingreso.textContent=o.ingresos[0]||ts.toLocaleTimeString();
+        tr.classList.add('active');
+        tr.classList.remove('finished');
+        el.chip.style.display='none';
+        el.startBtn.style.display='inline-flex';
+        el.startBtn.textContent='PAUSA';
+        el.startBtn.classList.remove('start');
+        el.startBtn.classList.add('pause');
+        el.finishBtn.textContent='Finalizar';
+        el.finishBtn.classList.remove('finished');
+        el.finishBtn.disabled=false;
+        saveStore();
+      });
+
+      tr._obj=o;
+      tr._el=el;
+      return tr;
+    }
+
+    function addRow(){
+      const o=createState();
+      state.push(o);
+      const tr=createRow(o);
+      tbody.appendChild(tr);
+      renderIndexAll();
+      saveStore();
+    }
+
+    function updateUI(){
+      [...tbody.children].forEach(tr=>{
+        const o=tr._obj;
+        const el=tr._el;
+        let ms=o.elapsed;
+        if(o.running&&o.lastStart) ms+=Date.now()-o.lastStart;
+        el.timer.textContent=formatMS(ms);
+        el.ingreso.textContent=o.ingresos.length? o.ingresos[0]:'-';
+        el.salida.textContent=o.salidas.length? o.salidas[o.salidas.length-1]:'-';
+      });
+      updateTotalDisplay();
+    }
+
+    function updateTotalDisplay(){
+      const totalMs=state.reduce((acc,o)=>{
+        let v=o.elapsed;
+        if(o.running&&o.lastStart) v+=Date.now()-o.lastStart;
+        return acc+v;
+      },0);
+      $total.textContent=formatMS(totalMs);
+    }
+
+    function renderAll(){
+      tbody.innerHTML='';
+      state.forEach(o=>tbody.appendChild(createRow(o)));
+      renderIndexAll();
+      updateUI();
+    }
+
+    if(!state.length){
+      for(let i=0;i<15;i++) addRow();
+    } else {
+      renderAll();
+    }
+
+    mount.querySelector('[data-f="add"]').addEventListener('click',()=>{
+      addRow();
+      setTimeout(()=>window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}),80);
+    });
+
+    mount.querySelector('[data-f="reset"]').addEventListener('click',()=>{
+      if(!confirm('Reiniciar registros de '+areaId+'?')) return;
+      state.length = 0;
+      tbody.innerHTML = '';
+      for(let i=0;i<15;i++){
+        const o = createState();
+        state.push(o);
+        tbody.appendChild(createRow(o));
+      }
+      renderIndexAll();
+      saveStore();
+    });
+
+    mount.querySelector('[data-f="endShift"]').addEventListener('click',()=>{
+      const rows=state.map(o=>{
+        let ms=o.elapsed;
+        if(o.running&&o.lastStart) ms+=Date.now()-o.lastStart;
+        return [o.index,o.nombre||'',o.diagnostico||'',o.rs||'',(o.ingresos[0]||''),(o.salidas.slice(-1)[0]||''),formatMS(ms)];
+      });
+      const totalMs=state.reduce((acc,o)=>{
+        let v=o.elapsed;
+        if(o.running&&o.lastStart) v+=Date.now()-o.lastStart;
+        return acc+v;
+      },0);
+      const totalPatients=state.filter(o=> (o.nombre&&o.nombre.trim()!=='')).length||state.length;
+      const avgMs=totalPatients? Math.round(totalMs/totalPatients):0;
+
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:'landscape'});
+      doc.setFontSize(14);
+      doc.text(`REGISTRO – ${areaId}`,14,14);
+      doc.setFontSize(10);
+      doc.text('Fecha: '+ new Date().toLocaleString(),14,20);
+      doc.autoTable({
+        head:[["N°","Nombre","Diagnóstico","R/S","Ingreso","Salida","Tiempo (hh:mm:ss)"]],
+        body:rows,
+        theme:'grid',
+        startY:26,
+        styles:{fontSize:9,cellPadding:2},
+        headStyles:{fillColor:[22,94,168],textColor:255},
+        alternateRowStyles:{fillColor:[240,246,255]}
+      });
+      const finalY=doc.lastAutoTable.finalY+8;
+      doc.setFontSize(11);
+      doc.text('RESUMEN',14,finalY);
+      const resumenBody=[["Número total de pacientes",String(totalPatients)],["Tiempo total acumulado",formatMS(totalMs)],["Tiempo promedio por paciente",formatMS(avgMs)]];
+      doc.autoTable({ startY:finalY+4, theme:'plain', body:resumenBody, styles:{fontSize:10}, columnStyles:{0:{cellWidth:120},1:{cellWidth:60}} });
+      const fname=`registro_${areaId}_${new Date().toISOString().slice(0,10)}.pdf`;
+      doc.save(fname);
+    });
+
+    setInterval(updateUI, 500);
+  }
+
+  // ------------------------
+  // COMPONENTE PROCEDIMIENTOS AREA
+  // ------------------------
+  function ProcAreaComponent({mount, area}){
+    const lista=[
+      "Tratamiento IV",
+      "Tratamiento VO",
+      "Tratamiento SC",
+      "Canalizar Vias",
+      "Baños en cama",
+      "Baño Asistido",
+      "Educación"
+    ];
+
+    const key=`PROC_${area}`;
+    Store[key]=Store[key]||lista.map(()=>[0,0,0]);
+    const counts=Store[key];
+
+    mount.innerHTML=`
+      <div class="iny">
+        <table>
+          <thead><tr><th>Procedimiento</th><th>I</th><th>II</th><th>III</th><th>Total</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>`;
+
+    const tbody=mount.querySelector('tbody');
+
+    function impactar(nombre,delta){
+      if(nombre==="Tratamiento IV") addProcedure({nombre:'Administracion de medicamentos via intravenosa',delta});
+      if(nombre==="Tratamiento VO") addProcedure({nombre:'Administracion de medicamentos via oral',delta});
+      if(nombre==="Tratamiento SC") addProcedure({nombre:'Administracion de medicamentos via Subcutanea',delta});
+      if(nombre==="Canalizar Vias")[
+        'Canalización de via periferica','Retiro de via periferica','Cambiar via periferica'
+      ].forEach(p=>addProcedure({nombre:p,delta}));
+      if(nombre==="Baños en cama"||nombre==="Baño Asistido")[
+        'Aseo Genital','Cuidados Higienicos','Movilidad Pasiva','Realizar baño en cama','Vestir diferentes tipos de cama'
+      ].forEach(p=>addProcedure({nombre:p,delta}));
+      if(nombre==="Educación") addProcedure({nombre:'Educación',delta});
+    }
+
+    function cell(i,t){
+      const v = counts[i][t-1]||0;
+      return `
+        <td>
+          <input type="number" min="0" step="1" value="${v}" style="width:72px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-weight:700;text-align:center" data-kind="manual" data-i="${i}" data-t="${t}" />
+          <div style="margin-top:6px">
+            <button class="increment" data-i="${i}" data-t="${t}" data-op="+">+1</button>
+            <button class="decrement" data-i="${i}" data-t="${t}" data-op="-">-1</button>
+          </div>
+        </td>`;
+    }
+
+    function render(){
+      tbody.innerHTML=lista.map((proc,i)=>{
+        const total = (counts[i][0]||0)+(counts[i][1]||0)+(counts[i][2]||0);
+        return `
+          <tr>
+            <td>${proc}</td>
+            ${[1,2,3].map(t=>cell(i,t)).join('')}
+            <td style="font-weight:800">${total}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    tbody.addEventListener('click',e=>{
+      const btn = e.target.closest('button.increment,button.decrement');
+      if(!btn) return;
+      const i=+btn.dataset.i;
+      const t=+btn.dataset.t;
+      const d=btn.classList.contains('increment')?1:-1;
+      if(Number.isNaN(i)||Number.isNaN(t)) return;
+      counts[i][t-1]=Math.max(0,(counts[i][t-1]||0)+d);
+      impactar(lista[i],d);
+      saveStore();
+      render();
+    });
+
+    tbody.addEventListener('change',e=>{
+      if(!(e.target && e.target.matches('input[data-kind="manual"]'))) return;
+      const i=+e.target.dataset.i;
+      const t=+e.target.dataset.t;
+      if(Number.isNaN(i)||Number.isNaN(t)) return;
+      const oldVal = counts[i][t-1]||0;
+      let newVal = parseInt(e.target.value,10);
+      if(!Number.isFinite(newVal) || Number.isNaN(newVal)) newVal = oldVal;
+      newVal = Math.max(0,newVal);
+      const delta = newVal - oldVal;
+      if(delta!==0){
+        counts[i][t-1]=newVal;
+        impactar(lista[i],delta);
+        saveStore();
+      }
+      render();
+    });
+
+    render();
+  }
+
+  // ------------------------
+  // COMPONENTE INYECTABLES
+  // ------------------------
+  function InyComponent({mount, context}){
+    const idPrefix = `iny_${context}`;
+    const conf = Store.inyectables[context];
+    if(!conf.counts.length){ conf.meds.forEach(()=> conf.counts.push([0,0,0])); }
+
+    mount.innerHTML = `
+      <div class="iny">
+        <table aria-label="Registro diario de medicamentos">
+          <thead><tr>
+            <th>Medicamento</th><th>I Turno</th><th>II Turno</th><th>III Turno</th><th>Total</th>
+          </tr></thead>
+          <tbody></tbody>
+          <tfoot><tr>
+            <td>Totales por turno</td>
+            <td id="${idPrefix}_t1">0</td>
+            <td id="${idPrefix}_t2">0</td>
+            <td id="${idPrefix}_t3">0</td>
+            <td id="${idPrefix}_tg">0</td>
+          </tr></tfoot>
+        </table>
+        <div style="margin-top:10px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn ghost" data-f="addMed">Agregar medicamento</button>
+          <button class="btn ghost" data-f="exportPDF">Exportar PDF</button>
+          <button class="btn" data-f="reset">Reiniciar día</button>
+        </div>
+      </div>`;
+
+    const tbody = mount.querySelector('tbody');
+
+    function rowHTML(i, med){
+      return `<tr>
+        <td>${med}</td>
+        ${[1,2,3].map(t=>`<td>
+            <span id="${idPrefix}_c_${i}_${t}" aria-live="polite" aria-atomic="true">${conf.counts[i][t-1]}</span><br/>
+            <button class="increment" data-i="${i}" data-t="${t}">+1</button>
+            <button class="decrement" data-i="${i}" data-t="${t}">-1</button>
+        </td>`).join('')}
+        <td id="${idPrefix}_total_${i}">${conf.counts[i].reduce((a,b)=>a+b,0)}</td>
+      </tr>`;
+    }
+
+    function render(){
+      tbody.innerHTML = conf.meds.map((m,i)=>rowHTML(i,m)).join('');
+      updateTotals();
+    }
+
+    function updateTotals(){
+      let t1=0,t2=0,t3=0;
+      conf.counts.forEach((arr)=>{ t1+=arr[0]; t2+=arr[1]; t3+=arr[2]; });
+      const g = t1+t2+t3;
+      const set=(id,v)=>{ const n=document.getElementById(id); if(n) n.textContent=String(v); };
+      set(`${idPrefix}_t1`,t1);
+      set(`${idPrefix}_t2`,t2);
+      set(`${idPrefix}_t3`,t3);
+      set(`${idPrefix}_tg`,g);
+      conf.counts.forEach((arr,i)=>{
+        const td=document.getElementById(`${idPrefix}_total_${i}`);
+        if(td) td.textContent=String(arr[0]+arr[1]+arr[2]);
+      });
+    }
+
+    // Click robusto para +1/-1
+    tbody.addEventListener('click',(e)=>{
+      const btn = e.target.closest('button.increment,button.decrement');
+      if(!btn) return;
+      const i = +btn.getAttribute('data-i');
+      const t = +btn.getAttribute('data-t');
+      if(Number.isNaN(i)||Number.isNaN(t)) return;
+      const inc = btn.classList.contains('increment') ? 1 : -1;
+      conf.counts[i][t-1] = Math.max(0, (conf.counts[i][t-1]||0) + inc);
+
+      if(context==='SILLAS') addProcedure({ nombre:'Administracion de medicamentos via intravenosa', delta: inc });
+      if(context==='TRATAMIENTOS') addProcedure({ nombre:'Administración de Medicamento Vía Intramuscular', delta: inc });
+
+      saveStore();
+      render();
+    });
+
+    mount.querySelector('[data-f="addMed"]').addEventListener('click',()=>{
+      let name=prompt('Nombre del medicamento a agregar:');
+      if(!name) return;
+      name=name.trim();
+      if(!name) return;
+      const exists=conf.meds.some(m=>m.toLowerCase()===name.toLowerCase());
+      if(exists){ alert('Ese medicamento ya existe.'); return; }
+      conf.meds.push(name);
+      conf.counts.push([0,0,0]);
+      saveStore();
+      render();
+    });
+
+    mount.querySelector('[data-f="reset"]').addEventListener('click',()=>{
+      if(!confirm('¿Seguro que quieres reiniciar los conteos de hoy?')) return;
+      conf.counts = conf.meds.map(()=>[0,0,0]);
+      saveStore();
+      render();
+    });
+
+    mount.querySelector('[data-f="exportPDF"]').addEventListener('click',()=>{
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:'landscape'});
+      doc.setFontSize(14);
+      doc.text(`Registro de Inyectables – ${context}`,14,14);
+      doc.setFontSize(10);
+      doc.text('Fecha: '+ new Date().toLocaleString(),14,20);
+      const head=[["Medicamento","I Turno","II Turno","III Turno","Total"]];
+      const body = conf.meds.map((m,i)=>[m,conf.counts[i][0],conf.counts[i][1],conf.counts[i][2], conf.counts[i].reduce((a,b)=>a+b,0)]);
+      doc.autoTable({ head, body, theme:'grid', startY:26, styles:{fontSize:9,cellPadding:2}, headStyles:{fillColor:[22,94,168],textColor:255}, alternateRowStyles:{fillColor:[240,246,255]} });
+      const fname=`inyectables_${context}_${new Date().toISOString().slice(0,10)}.pdf`;
+      doc.save(fname);
+    });
+
+    render();
+  }
+
+  // ----------------
+  // TRIAGE COMPONENT
+  // ----------------
+  const TRIAGE_PROC = [
+    "Toma de Signos Vitales","Curva Febril","Oximetría de Pulso","Toma de Presión Arterial","Medir Frecuencia Cardíaca","Medir Frecuencia Respiratoria","Medidas Antropométricas","Educación"
+  ];
+
+  function TriageComponent({mountId}){
+    const mount = document.getElementById(mountId);
+    mount.innerHTML = `
+      <div class="sheet">
+        <header><h2 style="margin:0">TRIAGE – Conteo de Procedimientos</h2><div><span data-f="fecha"></span></div></header>
+        <div class="toolbar">
+          <div>Turno actual: <b data-f="turno"></b></div>
+          <div class="spacer"></div>
+          <button class="btn ghost" data-f="pdf">Exportar PDF</button>
+          <button class="btn" data-f="reset">Reiniciar</button>
+        </div>
+        <table><thead><tr><th>Procedimiento</th><th>+1</th><th>-1</th><th>Total Turno</th></tr></thead><tbody></tbody></table>
+        <div style="padding:10px 16px">
+          <button class="btn" data-f="svAdulto">SV ADULTO</button>
+          <button class="btn" data-f="svNino">SV NIÑO</button>
+        </div>
+        <div style="padding:0 16px 14px">
+          <h3>Totales Generales del Día</h3>
+          <table><thead><tr><th>Procedimiento</th><th>Total Diario</th></tr></thead><tbody data-f="resumen"></tbody></table>
+        </div>
+      </div>`;
+
+    const $fecha = mount.querySelector('[data-f="fecha"]');
+    const $turno = mount.querySelector('[data-f="turno"]');
+    const tbody = mount.querySelector('tbody');
+    const $resumen = mount.querySelector('[data-f="resumen"]');
+
+    $fecha.textContent = new Date(Store.meta.fechaHoy+'T00:00:00').toLocaleDateString('es-ES',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+    function render(){
+      $turno.textContent = turnoKey();
+      const arr = Store.triage[turnoKey()];
+      tbody.innerHTML = TRIAGE_PROC.map((name,i)=>{
+        const v = arr[i]||0;
+        return `
+          <tr>
+            <td>${name}</td>
+            <td><button class="btn" data-i="${i}" data-op="+">+1</button></td>
+            <td><button class="btn" data-i="${i}" data-op="-">-1</button></td>
+            <td>
+              <input type="number" min="0" step="1" value="${v}" style="width:90px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-weight:800;text-align:center" data-kind="triage-manual" data-i="${i}" />
+            </td>
+          </tr>`;
+      }).join('');
+      renderResumen();
+    }
+
+    function renderResumen(){
+      const totals = TRIAGE_PROC.map((_,i)=> Store.triage.T1[i]+Store.triage.T2[i]+Store.triage.T3[i]);
+      $resumen.innerHTML = TRIAGE_PROC.map((n,i)=>`<tr><td>${n}</td><td>${totals[i]}</td></tr>`).join('');
+    }
+
+    tbody.addEventListener('click',(e)=>{
+      const btn = e.target.closest('button');
+      if(!btn) return;
+      const i = +btn.getAttribute('data-i');
+      const op = btn.getAttribute('data-op');
+      if(Number.isNaN(i) || (op!=='+' && op!=='-')) return;
+      const delta = op==='+'?1:-1;
+      const arr = Store.triage[turnoKey()];
+      arr[i] = Math.max(0, (arr[i]||0) + delta);
+      addProcedure({ nombre: TRIAGE_PROC[i], delta });
+      saveStore();
+      render();
+    });
+
+    tbody.addEventListener('change',(e)=>{
+      if(!(e.target && e.target.matches('input[data-kind="triage-manual"]'))) return;
+      const i = +e.target.getAttribute('data-i');
+      if(Number.isNaN(i)) return;
+      const arr = Store.triage[turnoKey()];
+      const oldVal = arr[i]||0;
+      let newVal = parseInt(e.target.value,10);
+      if(!Number.isFinite(newVal) || Number.isNaN(newVal)) newVal = oldVal;
+      newVal = Math.max(0,newVal);
+      const delta = newVal - oldVal;
+      if(delta!==0){
+        arr[i]=newVal;
+        addProcedure({ nombre: TRIAGE_PROC[i], delta });
+        saveStore();
+      }
+      render();
+    });
+
+    mount.querySelector('[data-f="svAdulto"]').addEventListener('click',()=>{
+      [0,1,2,3,4,5,7].forEach(i=>{
+        Store.triage[turnoKey()][i]++;
+        addProcedure({nombre:TRIAGE_PROC[i],delta:1});
+      });
+      saveStore();
+      render();
+    });
+
+    mount.querySelector('[data-f="svNino"]').addEventListener('click',()=>{
+      [1,4,5,6,7].forEach(i=>{
+        Store.triage[turnoKey()][i]++;
+        addProcedure({nombre:TRIAGE_PROC[i],delta:1});
+      });
+      saveStore();
+      render();
+    });
+
+    mount.querySelector('[data-f="reset"]').addEventListener('click',()=>{
+      if(!confirm('¿Seguro que deseas reiniciar los contadores de TRIAGE?')) return;
+      Store.triage = {T1:Array(8).fill(0),T2:Array(8).fill(0),T3:Array(8).fill(0)};
+      saveStore();
+      render();
+    });
+
+    mount.querySelector('[data-f="pdf"]').addEventListener('click',()=>{
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:'landscape'});
+      doc.setFontSize(14);
+      doc.text(`TRIAGE – Conteo de Procedimientos`,14,14);
+      doc.setFontSize(10);
+      doc.text('Fecha: '+ new Date().toLocaleString()+`  Turno: ${turnoKey()}`,14,20);
+      const head=[["Procedimiento","Total Turno"]];
+      const arr = Store.triage[turnoKey()];
+      const body = TRIAGE_PROC.map((n,i)=>[n,arr[i]]);
+      doc.autoTable({ head, body, theme:'grid', startY:26, styles:{fontSize:9,cellPadding:2}, headStyles:{fillColor:[22,94,168],textColor:255}, alternateRowStyles:{fillColor:[240,246,255]} });
+      const fname=`triage_${turnoKey()}_${new Date().toISOString().slice(0,10)}.pdf`;
+      doc.save(fname);
+    });
+
+    render();
+  }
+
+  // -----------------
+  // CUADRO 44 (vista)
+  // -----------------
+  function Cuadro44View({mountId}){
+    const mount = document.getElementById(mountId);
+    mount.innerHTML = `
+      <div class="sheet">
+        <header><h2 style="margin:0">CUADRO 44 – ${MONTH_KEY}</h2>
+          <div>
+            <button class="btn ghost" data-f="pdf">Exportar PDF</button>
+            <button class="btn" data-f="cerrar">Cerrar día</button>
+          </div>
+        </header>
+        <div class="c44-scroll">
+          <table><thead><tr id="c44_head"><th>Procedimiento</th></tr></thead><tbody id="c44_body"></tbody></table>
+        </div>
+      </div>`;
+
+    function renderHead(){
+      const head = $('#c44_head', mount);
+      head.innerHTML = '<th>Procedimiento</th>' + Array.from({length:DAYS_THIS_MONTH},(_,i)=>`<th>${i+1}</th>`).join('');
+    }
+
+    function renderBody(){
+      const body = $('#c44_body', mount);
+      const rows = Object.keys(Store.cuadro44).sort().map(proc=>{
+        const arr = Store.cuadro44[proc];
+        return `<tr><td>${proc}</td>${arr.map(v=>`<td style="text-align:center">${v}</td>`).join('')}</tr>`;
+      }).join('');
+      body.innerHTML = rows || '<tr><td colspan="33" style="text-align:center">Sin datos</td></tr>';
+    }
+
+    mount.querySelector('[data-f="pdf"]').addEventListener('click',()=>{
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:'landscape'});
+      doc.setFontSize(14);
+      doc.text(`CUADRO 44 – ${MONTH_KEY}`,14,14);
+      doc.setFontSize(10);
+      doc.text('Generado: '+ new Date().toLocaleString(),14,20);
+      const head=[['Procedimiento', ...Array.from({length:DAYS_THIS_MONTH},(_,i)=>String(i+1))]];
+      const body = Object.keys(Store.cuadro44).sort().map(proc=>[proc, ...Store.cuadro44[proc]]);
+      doc.autoTable({ head, body, theme:'grid', startY:26, styles:{fontSize:8,cellPadding:1}, headStyles:{fillColor:[22,94,168],textColor:255}, alternateRowStyles:{fillColor:[240,246,255]} });
+      const fname=`cuadro44_${MONTH_KEY}.pdf`;
+      doc.save(fname);
+    });
+
+    mount.querySelector('[data-f="cerrar"]').addEventListener('click',()=>{
+      if(!confirm('Esto genera PDFs y prepara el siguiente día (mismo mes). ¿Continuar?')) return;
+      alert('Día cerrado. Continúa registrando en la nueva fecha.');
+    });
+
+    renderHead();
+    renderBody();
+
+    mount._refresh = ()=>{ renderHead(); renderBody(); };
+  }
+
+  // ----------------
+  // RENDER PESTAÑAS
+  // ----------------
+  function renderSillas(){
+    const host = $('#pane-SILLAS');
+    host.innerHTML = `
+      <div class="sheet" style="margin-bottom:16px">
+        <header><h2 style="margin:0">SILLAS – Timer</h2><div>Fecha: ${new Date(Store.meta.fechaHoy+'T00:00:00').toLocaleDateString()}</div></header>
+        <div id="timer_sillas"></div>
+      </div>
+      <div class="sheet">
+        <header><h2 style="margin:0">SILLAS – Inyectables (cuenta como <i>vía intravenosa</i> en Cuadro 44)</h2><div></div></header>
+        <div style="padding:12px" id="iny_sillas"></div>
+      </div>`;
+    TimerComponent({mountId:'timer_sillas', areaId:'SILLAS'});
+    InyComponent({mount: $('#iny_sillas'), context:'SILLAS'});
+  }
+
+  function renderTimerOnly(id){
+    const host = $(`#pane-${id}`);
+    host.innerHTML = `
+      <div class="sheet" style="margin-bottom:16px">
+        <header><h2 style="margin:0">${id} – Timer</h2></header>
+        <div id="timer_${id.toLowerCase()}"></div>
+      </div>
+      <div class="sheet">
+        <header><h2 style="margin:0">${id} – Procedimientos</h2></header>
+        <div style="padding:12px" id="proc_${id.toLowerCase()}"></div>
+      </div>`;
+    TimerComponent({mountId:`timer_${id.toLowerCase()}`, areaId:id});
+    ProcAreaComponent({mount: document.getElementById(`proc_${id.toLowerCase()}`), area:id});
+  }
+
+  function renderTriage(){ TriageComponent({mountId:'pane-TRIAGE'}); }
+  function renderTratamientos(){ InyComponent({mount: $('#pane-TRATAMIENTOS'), context:'TRATAMIENTOS'}); }
+  function renderCuadro(){ Cuadro44View({mountId:'pane-CUADRO44'}); }
+
+  // ------------------------
+  // GLOBAL CONTROLS
+  // ------------------------
+  function updateGC(){
+    $('#gc_fecha').textContent = new Date(Store.meta.fechaHoy+'T00:00:00').toLocaleDateString();
+    $('#gc_turno').value = Store.meta.turno;
+    $('#gc_rol').value = Store.meta.rol;
+    const pane = document.getElementById('pane-CUADRO44');
+    if(pane && pane._refresh) pane._refresh();
+  }
+
+  $('#gc_turno').addEventListener('change', (e)=>{ Store.meta.turno=e.target.value; saveStore(); });
+  $('#gc_rol').addEventListener('change', (e)=>{ Store.meta.rol=e.target.value; saveStore(); });
+
+  setInterval(()=>{
+    const now = new Date();
+    const dk = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    if(dk!==Store.meta.fechaHoy){
+      Store.meta.fechaHoy = dk;
+      saveStore();
+      alert('📅 Nuevo día detectado: los registros se sumarán desde hoy.');
+    }
+  }, 60_000);
+
+  // -------------
+  // BOOTSTRAP APP
+  // -------------
+  loadStore();
+
+  (function ensureMeds(){
+    const desired=["Dexametasona","Clorfenamina","Buscapina","Cimetidina","Tramal","Voltaren","Plasil","Laxis"];
+    const curT=Store.inyectables?.TRATAMIENTOS?.meds||[];
+    const sameT = curT.length===desired.length && curT.every((m,i)=>m===desired[i]);
+    if(!sameT){
+      Store.inyectables.TRATAMIENTOS.meds = desired.slice();
+      Store.inyectables.TRATAMIENTOS.counts = desired.map(()=>[0,0,0]);
+    }
+    const curS=Store.inyectables?.SILLAS?.meds||[];
+    const sameS = curS.length===desired.length && curS.every((m,i)=>m===desired[i]);
+    if(!sameS){
+      Store.inyectables.SILLAS.meds = desired.slice();
+      if(!Store.inyectables.SILLAS.counts || Store.inyectables.SILLAS.counts.length!==desired.length){
+        Store.inyectables.SILLAS.counts = desired.map(()=>[0,0,0]);
+      }
+    }
+    saveStore();
+  })();
+
+  buildTabs();
+  updateGC();
+
+  renderSillas();
+  renderTimerOnly('SILLONES');
+  renderTimerOnly('OBSERVACION');
+  renderTimerOnly('CUNAS');
+  renderTimerOnly('TRANSITORIAS');
+  renderTriage();
+  renderTratamientos();
+  renderCuadro();
+
+  window.addEventListener('beforeunload',(e)=>{
+    const running = Object.values(Store.timers).some(arr=>arr.some(o=>o.running&&!o.finalized));
+    if(running){ e.preventDefault(); e.returnValue=''; }
+  });
+
+  // -----------------
+  // SELF-TESTS (no afectan la UI; solo consola)
+  // -----------------
+  (function selfTests(){
+    try{
+      console.assert(typeof turnoKey==='function','turnoKey debe existir');
+      console.assert(Store && Store.meta && typeof Store.meta.turno==='string','Store.meta.turno debe existir');
+      console.assert(Store.inyectables && Store.inyectables.SILLAS && Array.isArray(Store.inyectables.SILLAS.meds),'inyectables.SILLAS debe existir');
+      console.assert(Store.inyectables && Store.inyectables.TRATAMIENTOS && Array.isArray(Store.inyectables.TRATAMIENTOS.meds),'inyectables.TRATAMIENTOS debe existir');
+    }catch(err){
+      console.warn('Self-tests fallaron:', err);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
