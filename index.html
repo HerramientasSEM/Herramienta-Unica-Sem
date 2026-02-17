@@ -158,8 +158,13 @@
   // SYNC REMOTO (Google Sheets vía Apps Script)
   // ==========================
   const API_URL = 'https://script.google.com/macros/s/AKfycbzE4zzY9Rafdrcfdiul_SRzn1rtOLADpRuUKrnXThJm12kbfxqjd-76LHTVptkB99rkZg/exec';
-  const SHARED_KEY = 'HLA123'; // debe coincidir con SHARED_KEY en Apps Script
-  const POLL_MS = 3000;        // “casi realtime”
+  // Exponer para diagnóstico en consola
+  window.__HLA_SYNC__ = window.__HLA_SYNC__ || {};
+  window.__HLA_SYNC__.API_URL = API_URL;
+  const SHARED_KEY = 'HLA123';
+  window.__HLA_SYNC__.SHARED_KEY = SHARED_KEY; // debe coincidir con SHARED_KEY en Apps Script
+  const POLL_MS = 3000;
+  window.__HLA_SYNC__.POLL_MS = POLL_MS;        // “casi realtime”
   const PUSH_DEBOUNCE_MS = 900;
   const REMOTE_META_KEY = LS_KEY('REMOTE_META');
 
@@ -243,6 +248,8 @@
   }
 
   function loadRemoteMeta(){
+    window.__HLA_SYNC__.remoteVersion = remoteVersion;
+    window.__HLA_SYNC__.lastPulledAt = lastPulledAt;
     try{
       const raw = localStorage.getItem(REMOTE_META_KEY);
       if(!raw) return;
@@ -263,12 +270,15 @@
   }
 
   async function apiGet(){
+    // debug
+    window.__HLA_SYNC__.lastAction = 'GET';
     const url = `${API_URL}?month=${encodeURIComponent(MONTH_KEY)}&k=${encodeURIComponent(SHARED_KEY)}`;
     const res = await fetch(url, {method:'GET'});
     return await res.json();
   }
 
   async function apiPost(jsonStr){
+    window.__HLA_SYNC__.lastAction = 'POST';
     const body = new URLSearchParams({
       month: MONTH_KEY,
       k: SHARED_KEY,
@@ -298,6 +308,7 @@
   }
 
   async function pullIfNewer(){
+    window.__HLA_SYNC__.lastPullAttempt = new Date().toISOString();
     try{
       const r = await apiGet();
       if(!r || !r.ok) return;
@@ -317,6 +328,7 @@
   }
 
   async function pushNow(){
+    window.__HLA_SYNC__.lastPushAttempt = new Date().toISOString();
     if(suppressPush) return;
     try{
       const jsonStr = JSON.stringify(Store);
