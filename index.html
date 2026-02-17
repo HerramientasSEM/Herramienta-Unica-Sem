@@ -154,6 +154,20 @@
   const MONTH_KEY = `${yyyy}-${mm}`;
   const LS_KEY = (k)=>`HLA_STORE_${MONTH_KEY}_${k||''}`;
 
+  // ==========================
+  // SYNC REMOTO (Google Sheets vía Apps Script)
+  // ==========================
+  const API_URL = 'https://script.google.com/macros/s/AKfycbzE4zzY9Rafdrcfdiul_SRzn1rtOLADpRuUKrnXThJm12kbfxqjd-76LHTVptkB99rkZg/exec';
+  const SHARED_KEY = 'HLA123'; // debe coincidir con SHARED_KEY en Apps Script
+  const POLL_MS = 3000;        // “casi realtime”
+  const PUSH_DEBOUNCE_MS = 900;
+  const REMOTE_META_KEY = LS_KEY('REMOTE_META');
+
+  let remoteVersion = 0;
+  let lastPulledAt = '';
+  let suppressPush = false;
+  let pushTimer = null;
+
   const PROCEDIMIENTOS_DEF = [
     // principales usados en tus herramientas
     "Administración de Medicamento Vía Intramuscular",
@@ -221,9 +235,100 @@
     }catch{}
   }
 
-  function saveStore(){
+  function saveStore(opts={}){
+    const {skipRemote=false} = opts;
     try{ localStorage.setItem(LS_KEY('STORE'), JSON.stringify(Store)); }catch{}
     updateGC();
+    if(!skipRemote) schedulePush();
+  }
+
+  function loadRemoteMeta(){
+    try{
+      const raw = localStorage.getItem(REMOTE_META_KEY);
+      if(!raw) return;
+      const m = JSON.parse(raw);
+      if(m && (m.month_key===MONTH_KEY)){
+        remoteVersion = parseInt(m.version||0,10) || 0;
+        lastPulledAt = m.updated_at || '';
+      }
+    }catch{}
+  }
+
+  function saveRemoteMeta({version, updated_at}){
+    remoteVersion = parseInt(version||0,10) || remoteVersion;
+    lastPulledAt = updated_at || lastPulledAt;
+    try{
+      localStorage.setItem(REMOTE_META_KEY, JSON.stringify({month_key: MONTH_KEY, version: remoteVersion, updated_at: lastPulledAt}));
+    }catch{}
+  }
+
+  async function apiGet(){
+    const url = `${API_URL}?month=${encodeURIComponent(MONTH_KEY)}&k=${encodeURIComponent(SHARED_KEY)}`;
+    const res = await fetch(url, {method:'GET'});
+    return await res.json();
+  }
+
+  async function apiPost(jsonStr){
+    const body = new URLSearchParams({
+      month: MONTH_KEY,
+      k: SHARED_KEY,
+      version: String(remoteVersion||0),
+      json: jsonStr
+    });
+    const res = await fetch(API_URL, {method:'POST', body});
+    return await res.json();
+  }
+
+  function applyRemoteStore(payload){
+    if(!payload || !payload.json) return false;
+    let parsed;
+    try{ parsed = JSON.parse(payload.json); }catch{ return false; }
+    if(!parsed || typeof parsed!=='object') return false;
+
+    suppressPush = true;
+    try{
+      Object.keys(Store).forEach(k=>{ delete Store[k]; });
+      Object.assign(Store, parsed);
+      saveStore({skipRemote:true});
+      saveRemoteMeta({version: payload.version, updated_at: payload.updated_at});
+    } finally {
+      suppressPush = false;
+    }
+    return true;
+  }
+
+  async function pullIfNewer(){
+    try{
+      const r = await apiGet();
+      if(!r || !r.ok) return;
+      const v = parseInt(r.version||0,10) || 0;
+      if(v > (remoteVersion||0)){
+        applyRemoteStore(r);
+      } else {
+        saveRemoteMeta({version: v, updated_at: r.updated_at});
+      }
+    }catch{}
+  }
+
+  function schedulePush(){
+    if(suppressPush) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(()=>{ pushNow(); }, PUSH_DEBOUNCE_MS);
+  }
+
+  async function pushNow(){
+    if(suppressPush) return;
+    try{
+      const jsonStr = JSON.stringify(Store);
+      const r = await apiPost(jsonStr);
+      if(!r || !r.ok){
+        if(r && r.error==='stale_client'){
+          await pullIfNewer();
+        }
+        return;
+      }
+      saveRemoteMeta({version: r.version, updated_at: r.updated_at});
+    }catch{}
   }
 
   function normName(name){
@@ -1019,6 +1124,7 @@
   // -------------
   // BOOTSTRAP APP
   // -------------
+  loadRemoteMeta();
   loadStore();
 
   (function ensureMeds(){
@@ -1042,6 +1148,11 @@
 
   buildTabs();
   updateGC();
+
+  // Primer pull remoto (no bloquea la UI)
+  pullIfNewer();
+  // Polling para “casi tiempo real”
+  setInterval(pullIfNewer, POLL_MS);
 
   renderSillas();
   renderTimerOnly('SILLONES');
