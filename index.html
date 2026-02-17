@@ -297,6 +297,7 @@
 
     suppressPush = true;
     try{
+      // Reemplaza Store y persiste local
       Object.keys(Store).forEach(k=>{ delete Store[k]; });
       Object.assign(Store, parsed);
       saveStore({skipRemote:true});
@@ -304,7 +305,43 @@
     } finally {
       suppressPush = false;
     }
+
+    // IMPORTANTE: los componentes (Timer/Iny/Triage) capturan referencias al Store.
+    // Para reflejar cambios remotos en la UI, hacemos un "soft reload" una sola vez.
+    softReloadOnce(payload.version);
     return true;
+  }
+
+  function softReloadOnce(newV){
+    try{
+      const k = `HLA_SOFT_RELOAD_${MONTH_KEY}`;
+      const last = sessionStorage.getItem(k);
+      if(last === String(newV)) return; // ya recargamos para esta versión
+      sessionStorage.setItem(k, String(newV));
+      // recarga suave
+      location.reload();
+    }catch{}
+  }
+
+  function compactStoreForRemote(){
+    // Reduce tamaño: no guardamos filas vacías de timers (se regeneran 15 al cargar)
+    const clone = JSON.parse(JSON.stringify(Store));
+    const areas = ['SILLAS','SILLONES','OBSERVACION','CUNAS','TRANSITORIAS'];
+    clone.timers = clone.timers || {};
+    areas.forEach(a=>{
+      const arr = (clone.timers[a]||[]);
+      const filtered = arr.filter(o=>{
+        if(!o) return false;
+        const hasName = (o.nombre||'').trim()!=='';
+        const hasDx = (o.diagnostico||'').trim()!=='';
+        const hasRS = (o.rs||'').trim()!=='';
+        const hasTime = (o.elapsed||0)>0 || (o.running && o.lastStart);
+        const hasIO = (o.ingresos&&o.ingresos.length) || (o.salidas&&o.salidas.length);
+        return hasName || hasDx || hasRS || hasTime || hasIO;
+      });
+      clone.timers[a] = filtered;
+    });
+    return clone;
   }
 
   async function pullIfNewer(){
@@ -331,7 +368,7 @@
     window.__HLA_SYNC__.lastPushAttempt = new Date().toISOString();
     if(suppressPush) return;
     try{
-      const jsonStr = JSON.stringify(Store);
+      const jsonStr = JSON.stringify(compactStoreForRemote());
       const r = await apiPost(jsonStr);
       if(!r || !r.ok){
         if(r && r.error==='stale_client'){
