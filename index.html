@@ -174,7 +174,6 @@
   let pushTimer = null;
 
   const PROCEDIMIENTOS_DEF = [
-    // principales usados en tus herramientas
     "Administración de Medicamento Vía Intramuscular",
     "Administracion de medicamentos via intravenosa",
     "Administracion de medicamentos via oral",
@@ -190,7 +189,6 @@
     "Medir Frecuencia Respiratoria",
     "Medidas Antropométricas",
     "Educación",
-    // otros del Cuadro 44 legado (extensible)
     "Aseo Genital","Cuidados Higienicos","Movilidad Pasiva","Realizar baño en cama","Vestir diferentes tipos de cama",
     "Aplicación de Hidrocoloides","Aplicación de otro vendaje de presión","Cambio de Vendaje","Colocación de Vendajes","Colocación Venda Elástica",
     "Curación de Quemadura","Curaciones","Frotis y Cultivos","Toma de Muestras"
@@ -199,7 +197,6 @@
   function daysInMonth(y,m){return new Date(y, m, 0).getDate();}
   const DAYS_THIS_MONTH = daysInMonth(yyyy, parseInt(mm,10));
 
-  // Estado base por mes
   function baseCuadro44(){
     const obj={};
     PROCEDIMIENTOS_DEF.forEach(p=>{obj[p]=Array(DAYS_THIS_MONTH).fill(0)});
@@ -207,11 +204,7 @@
   }
 
   const Store = {
-    meta: {
-      fechaHoy: DATE_KEY,
-      turno: 'T1',
-      rol: 'enfermera'
-    },
+    meta: { fechaHoy: DATE_KEY, turno: 'T1', rol: 'enfermera' },
     timers: {SILLAS:[], SILLONES:[], OBSERVACION:[], CUNAS:[], TRANSITORIAS:[]},
     triage: {T1: Array(8).fill(0), T2: Array(8).fill(0), T3: Array(8).fill(0)},
     inyectables: {
@@ -221,9 +214,7 @@
     cuadro44: baseCuadro44()
   };
 
-  function turnoKey(){
-    return Store.meta.turno;
-  }
+  function turnoKey(){ return Store.meta.turno; }
 
   function loadStore(){
     try{
@@ -270,7 +261,6 @@
   }
 
   async function apiGet(){
-    // debug
     window.__HLA_SYNC__.lastAction = 'GET';
     const url = `${API_URL}?month=${encodeURIComponent(MONTH_KEY)}&k=${encodeURIComponent(SHARED_KEY)}`;
     const res = await fetch(url, {method:'GET'});
@@ -297,7 +287,6 @@
 
     suppressPush = true;
     try{
-      // Reemplaza Store y persiste local
       Object.keys(Store).forEach(k=>{ delete Store[k]; });
       Object.assign(Store, parsed);
       saveStore({skipRemote:true});
@@ -306,8 +295,6 @@
       suppressPush = false;
     }
 
-    // IMPORTANTE: los componentes (Timer/Iny/Triage) capturan referencias al Store.
-    // Para reflejar cambios remotos en la UI, hacemos un "soft reload" una sola vez.
     softReloadOnce(payload.version);
     return true;
   }
@@ -316,15 +303,13 @@
     try{
       const k = `HLA_SOFT_RELOAD_${MONTH_KEY}`;
       const last = sessionStorage.getItem(k);
-      if(last === String(newV)) return; // ya recargamos para esta versión
+      if(last === String(newV)) return;
       sessionStorage.setItem(k, String(newV));
-      // recarga suave
       location.reload();
     }catch{}
   }
 
   function compactStoreForRemote(){
-    // Reduce tamaño: no guardamos filas vacías de timers (se regeneran 15 al cargar)
     const clone = JSON.parse(JSON.stringify(Store));
     const areas = ['SILLAS','SILLONES','OBSERVACION','CUNAS','TRANSITORIAS'];
     clone.timers = clone.timers || {};
@@ -439,6 +424,7 @@
       });
       frag.appendChild(b);
     });
+    $('#tabs').innerHTML = '';
     $('#tabs').appendChild(frag);
   }
 
@@ -502,6 +488,7 @@
         `</div></td>`;
 
       tr.querySelectorAll('input[type=text]').forEach(inp=>{
+        inp.value = (o[inp.dataset.field] || '').toUpperCase();
         inp.addEventListener('input', ()=>{
           inp.value=inp.value.toUpperCase();
           o[inp.dataset.field]=inp.value;
@@ -702,109 +689,9 @@
   }
 
   // ------------------------
-  // COMPONENTE PROCEDIMIENTOS AREA
-  // ------------------------
-  function ProcAreaComponent({mount, area}){
-    const lista=[
-      "Tratamiento IV",
-      "Tratamiento VO",
-      "Tratamiento SC",
-      "Canalizar Vias",
-      "Baños en cama",
-      "Baño Asistido",
-      "Educación"
-    ];
-
-    const key=`PROC_${area}`;
-    Store[key]=Store[key]||lista.map(()=>[0,0,0]);
-    const counts=Store[key];
-
-    mount.innerHTML=`
-      <div class="iny">
-        <table>
-          <thead><tr><th>Procedimiento</th><th>I</th><th>II</th><th>III</th><th>Total</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>`;
-
-    const tbody=mount.querySelector('tbody');
-
-    function impactar(nombre,delta){
-      if(nombre==="Tratamiento IV") addProcedure({nombre:'Administracion de medicamentos via intravenosa',delta});
-      if(nombre==="Tratamiento VO") addProcedure({nombre:'Administracion de medicamentos via oral',delta});
-      if(nombre==="Tratamiento SC") addProcedure({nombre:'Administracion de medicamentos via Subcutanea',delta});
-      if(nombre==="Canalizar Vias")[
-        'Canalización de via periferica','Retiro de via periferica','Cambiar via periferica'
-      ].forEach(p=>addProcedure({nombre:p,delta}));
-      if(nombre==="Baños en cama"||nombre==="Baño Asistido")[
-        'Aseo Genital','Cuidados Higienicos','Movilidad Pasiva','Realizar baño en cama','Vestir diferentes tipos de cama'
-      ].forEach(p=>addProcedure({nombre:p,delta}));
-      if(nombre==="Educación") addProcedure({nombre:'Educación',delta});
-    }
-
-    function cell(i,t){
-      const v = counts[i][t-1]||0;
-      return `
-        <td>
-          <input type="number" min="0" step="1" value="${v}" style="width:72px;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-weight:700;text-align:center" data-kind="manual" data-i="${i}" data-t="${t}" />
-          <div style="margin-top:6px">
-            <button class="increment" data-i="${i}" data-t="${t}" data-op="+">+1</button>
-            <button class="decrement" data-i="${i}" data-t="${t}" data-op="-">-1</button>
-          </div>
-        </td>`;
-    }
-
-    function render(){
-      tbody.innerHTML=lista.map((proc,i)=>{
-        const total = (counts[i][0]||0)+(counts[i][1]||0)+(counts[i][2]||0);
-        return `
-          <tr>
-            <td>${proc}</td>
-            ${[1,2,3].map(t=>cell(i,t)).join('')}
-            <td style="font-weight:800">${total}</td>
-          </tr>`;
-      }).join('');
-    }
-
-    tbody.addEventListener('click',e=>{
-      const btn = e.target.closest('button.increment,button.decrement');
-      if(!btn) return;
-      const i=+btn.dataset.i;
-      const t=+btn.dataset.t;
-      const d=btn.classList.contains('increment')?1:-1;
-      if(Number.isNaN(i)||Number.isNaN(t)) return;
-      counts[i][t-1]=Math.max(0,(counts[i][t-1]||0)+d);
-      impactar(lista[i],d);
-      saveStore();
-      render();
-    });
-
-    tbody.addEventListener('change',e=>{
-      if(!(e.target && e.target.matches('input[data-kind="manual"]'))) return;
-      const i=+e.target.dataset.i;
-      const t=+e.target.dataset.t;
-      if(Number.isNaN(i)||Number.isNaN(t)) return;
-      const oldVal = counts[i][t-1]||0;
-      let newVal = parseInt(e.target.value,10);
-      if(!Number.isFinite(newVal) || Number.isNaN(newVal)) newVal = oldVal;
-      newVal = Math.max(0,newVal);
-      const delta = newVal - oldVal;
-      if(delta!==0){
-        counts[i][t-1]=newVal;
-        impactar(lista[i],delta);
-        saveStore();
-      }
-      render();
-    });
-
-    render();
-  }
-
-  // ------------------------
   // COMPONENTE INYECTABLES
   // ------------------------
   function InyComponent({mount, context}){
-    // context: 'SILLAS' (→ IV) o 'TRATAMIENTOS' (→ IM)
     const idPrefix = `iny_${context}`;
     const conf = Store.inyectables[context];
     if(!conf.counts.length){ conf.meds.forEach(()=> conf.counts.push([0,0,0])); }
@@ -926,8 +813,8 @@
     { label:'Tratamiento SC', maps:[{nombre:'Administracion de medicamentos via Subcutanea', mult:1}] },
     { label:'Canalizar Vias', maps:[
       {nombre:'Canalización de via periferica', mult:1},
-      {nombre:'retiro de via periferica', mult:1},
-      {nombre:'cambiar via periferica', mult:1}
+      {nombre:'Retiro de via periferica', mult:1},
+      {nombre:'Cambiar via periferica', mult:1}
     ]},
     { label:'Baños en cama', maps:[
       {nombre:'Aseo Genital', mult:1},
@@ -1056,7 +943,6 @@
 
     render();
   }
-
 
   // ----------------
   // TRIAGE COMPONENT
@@ -1245,7 +1131,6 @@
 
     renderHead();
     renderBody();
-
     mount._refresh = ()=>{ renderHead(); renderBody(); };
   }
 
@@ -1257,7 +1142,7 @@
     host.innerHTML = `
       <div class="sheet" style="margin-bottom:16px">
         <header><h2 style="margin:0">SILLAS – Timer</h2><div>Fecha: ${new Date(Store.meta.fechaHoy+'T00:00:00').toLocaleDateString()}</div></header>
-        <div id="timer_sillas"></div>
+        <div style="padding:12px" id="timer_sillas"></div>
       </div>
       <div class="sheet">
         <header><h2 style="margin:0">SILLAS – Inyectables (cuenta como <i>vía intravenosa</i> en Cuadro 44)</h2><div></div></header>
@@ -1265,12 +1150,6 @@
       </div>`;
     TimerComponent({mountId:'timer_sillas', areaId:'SILLAS'});
     InyComponent({mount: $('#iny_sillas'), context:'SILLAS'});
-  }
-
-  function renderTimerOnly(id){
-    const host = $(`#pane-${id}`);
-    host.innerHTML = `<div id="timer_${id.toLowerCase()}" class="sheet"></div>`;
-    TimerComponent({mountId:`timer_${id.toLowerCase()}`, areaId:id});
   }
 
   function renderAreaCountersOnly(id){
@@ -1283,17 +1162,9 @@
     AreaCounterComponent({mount: document.getElementById(`ac_${id}`), areaId: id});
   }
 
-  function renderTriage(){
-    TriageComponent({mountId:'pane-TRIAGE'});
-  }
-
-  function renderTratamientos(){
-    InyComponent({mount: $('#pane-TRATAMIENTOS'), context:'TRATAMIENTOS'});
-  }
-
-  function renderCuadro(){
-    Cuadro44View({mountId:'pane-CUADRO44'});
-  }
+  function renderTriage(){ TriageComponent({mountId:'pane-TRIAGE'}); }
+  function renderTratamientos(){ InyComponent({mount: $('#pane-TRATAMIENTOS'), context:'TRATAMIENTOS'}); }
+  function renderCuadro(){ Cuadro44View({mountId:'pane-CUADRO44'}); }
 
   // ------------------------
   // GLOBAL CONTROLS
@@ -1341,7 +1212,7 @@
         Store.inyectables.SILLAS.counts = desired.map(()=>[0,0,0]);
       }
     }
-    saveStore();
+    saveStore({skipRemote:true});
   })();
 
   buildTabs();
@@ -1366,55 +1237,7 @@
     if(running){ e.preventDefault(); e.returnValue=''; }
   });
 
-  // -----------------
-  // SELF-TESTS (no afectan la UI; solo consola)
-  // -----------------
-  (function selfTests(){
-// === INICIALIZACIÓN FINAL UNIFICADA ===
-    try {
-      // 1. Cargar datos (Local y Nube)
-      loadStore();
-      loadRemoteMeta();
-
-      // 2. Dibujar la Interfaz (Esto restaura las pestañas y tablas)
-      buildTabs();
-      updateGC();
-      
-      // Inicializamos cada módulo de cronómetros
-      TimerComponent({mountId: 'pane-SILLAS', areaId: 'SILLAS'});
-      TimerComponent({mountId: 'pane-SILLONES', areaId: 'SILLONES'});
-      TimerComponent({mountId: 'pane-OBSERVACION', areaId: 'OBSERVACION'});
-      TimerComponent({mountId: 'pane-CUNAS', areaId: 'CUNAS'});
-      TimerComponent({mountId: 'pane-TRANSITORIAS', areaId: 'TRANSITORIAS'});
-      
-      // Inicializar Triage e Inyectables (si las funciones existen)
-      // Nota: Asegúrate de que estas funciones estén definidas arriba en tu código
-      if (typeof TriageComponent === 'function') {
-          TriageComponent({mountId: 'pane-TRIAGE'});
-      }
-      
-      // Para Inyectables usamos el contenedor correspondiente
-      const inyTrat = document.getElementById('pane-TRATAMIENTOS');
-      if (inyTrat && typeof InyComponent === 'function') {
-          InyComponent({mount: inyTrat, context: 'TRATAMIENTOS'});
-      }
-
-      // 3. Activar Sincronización Real-Time (Polling)
-      console.log("Conectando con Google Sheets...");
-      setInterval(async () => {
-        await pullIfNewer();
-      }, POLL_MS);
-
-      // 4. Si es la primera vez (versión 0), subir datos locales a la nube
-      if (remoteVersion === 0) {
-          schedulePush();
-      }
-
-    } catch(err) {
-      console.error('Error crítico al iniciar la app:', err);
-    }
-
-  })(); // Cierre de la función autoejecutable principal
+})(); // ✅ cierre correcto del IIFE principal
 </script>
 </body>
 </html>
