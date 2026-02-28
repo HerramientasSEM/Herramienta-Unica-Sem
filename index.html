@@ -1370,41 +1370,43 @@
   // SELF-TESTS (no afectan la UI; solo consola)
   // -----------------
   (function selfTests(){
-    try{
-      console.assert(typeof turnoKey==='function','turnoKey debe existir');
-      console.assert(Store && Store.meta && typeof Store.meta.turno==='string','Store.meta.turno debe existir');
-      console.assert(Store.inyectables && Store.inyectables.SILLAS && Array.isArray(Store.inyectables.SILLAS.meds),'inyectables.SILLAS debe existir');
-      console.assert(Store.inyectables && Store.inyectables.TRATAMIENTOS && Array.isArray(Store.inyectables.TRATAMIENTOS.meds),'inyectables.TRATAMIENTOS debe existir');
-  } catch(err) {
-      console.warn('Self-tests fallaron:', err);
+   // -----------------
+  // CIERRE Y ACTIVACIÓN (Paso 4 Unificado)
+  // -----------------
+  (function inicializarApp() {
+    try {
+      // 1. Cargar datos de memoria y nube
+      loadStore();
+      loadRemoteMeta();
+
+      // 2. Dibujar la Interfaz (Esto repara las áreas desaparecidas)
+      updateGC();
+      renderSillas();
+      renderAreaCountersOnly('SILLONES');
+      renderAreaCountersOnly('OBSERVACION');
+      renderAreaCountersOnly('CUNAS');
+      renderAreaCountersOnly('TRANSITORIAS');
+      renderTriage();
+      renderTratamientos();
+      renderCuadro();
+
+      // 3. Activar Sincronización Real-Time
+      console.log("Iniciando sincronización con Google Sheets...");
+      setInterval(async () => {
+        await pullIfNewer();
+      }, POLL_MS);
+
+      // 4. Si la nube está vacía, subir datos locales
+      if(remoteVersion === 0) {
+          schedulePush();
+      }
+
+    } catch(err) {
+      console.error('Error al iniciar la app:', err);
     }
+  })(); 
 
-    // === INICIALIZACIÓN Y SYNC (Paso 4) ===
-    
-    // 1. Cargamos datos
-    loadStore();
-    loadRemoteMeta();
-
-    // 2. DIBUJAMOS LA INTERFAZ (Esto hará que reaparezcan las áreas)
-    buildTabs();
-    TimerComponent({mountId: 'pane-SILLAS', areaId: 'SILLAS'});
-    TimerComponent({mountId: 'pane-SILLONES', areaId: 'SILLONES'});
-    TimerComponent({mountId: 'pane-OBSERVACION', areaId: 'OBSERVACION'});
-    TimerComponent({mountId: 'pane-CUNAS', areaId: 'CUNAS'});
-    TimerComponent({mountId: 'pane-TRANSITORIAS', areaId: 'TRANSITORIAS'});
-
-    // 3. Activamos el latido de sincronización
-    setInterval(async () => {
-      console.log("Sincronizando con Google Sheets...");
-      await pullIfNewer();
-    }, POLL_MS);
-
-    // 4. Primer empuje si está vacío
-    if(remoteVersion === 0) {
-        schedulePush();
-    }
-
-  })(); // <--- ESTE ES EL CIERRE DE LA FUNCIÓN PRINCIPAL (Solo debe haber uno)
+})(); // Cierre de la función principal
 </script>
 </body>
 </html>
