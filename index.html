@@ -1370,43 +1370,51 @@
   // SELF-TESTS (no afectan la UI; solo consola)
   // -----------------
   (function selfTests(){
-   // -----------------
-  // CIERRE Y ACTIVACIÓN (Paso 4 Unificado)
-  // -----------------
-  (function inicializarApp() {
+// === INICIALIZACIÓN FINAL UNIFICADA ===
     try {
-      // 1. Cargar datos de memoria y nube
+      // 1. Cargar datos (Local y Nube)
       loadStore();
       loadRemoteMeta();
 
-      // 2. Dibujar la Interfaz (Esto repara las áreas desaparecidas)
+      // 2. Dibujar la Interfaz (Esto restaura las pestañas y tablas)
+      buildTabs();
       updateGC();
-      renderSillas();
-      renderAreaCountersOnly('SILLONES');
-      renderAreaCountersOnly('OBSERVACION');
-      renderAreaCountersOnly('CUNAS');
-      renderAreaCountersOnly('TRANSITORIAS');
-      renderTriage();
-      renderTratamientos();
-      renderCuadro();
+      
+      // Inicializamos cada módulo de cronómetros
+      TimerComponent({mountId: 'pane-SILLAS', areaId: 'SILLAS'});
+      TimerComponent({mountId: 'pane-SILLONES', areaId: 'SILLONES'});
+      TimerComponent({mountId: 'pane-OBSERVACION', areaId: 'OBSERVACION'});
+      TimerComponent({mountId: 'pane-CUNAS', areaId: 'CUNAS'});
+      TimerComponent({mountId: 'pane-TRANSITORIAS', areaId: 'TRANSITORIAS'});
+      
+      // Inicializar Triage e Inyectables (si las funciones existen)
+      // Nota: Asegúrate de que estas funciones estén definidas arriba en tu código
+      if (typeof TriageComponent === 'function') {
+          TriageComponent({mountId: 'pane-TRIAGE'});
+      }
+      
+      // Para Inyectables usamos el contenedor correspondiente
+      const inyTrat = document.getElementById('pane-TRATAMIENTOS');
+      if (inyTrat && typeof InyComponent === 'function') {
+          InyComponent({mount: inyTrat, context: 'TRATAMIENTOS'});
+      }
 
-      // 3. Activar Sincronización Real-Time
-      console.log("Iniciando sincronización con Google Sheets...");
+      // 3. Activar Sincronización Real-Time (Polling)
+      console.log("Conectando con Google Sheets...");
       setInterval(async () => {
         await pullIfNewer();
       }, POLL_MS);
 
-      // 4. Si la nube está vacía, subir datos locales
-      if(remoteVersion === 0) {
+      // 4. Si es la primera vez (versión 0), subir datos locales a la nube
+      if (remoteVersion === 0) {
           schedulePush();
       }
 
     } catch(err) {
-      console.error('Error al iniciar la app:', err);
+      console.error('Error crítico al iniciar la app:', err);
     }
-  })(); 
 
-})(); // Cierre de la función principal
+  })(); // Cierre de la función autoejecutable principal
 </script>
 </body>
 </html>
