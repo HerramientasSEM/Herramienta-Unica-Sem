@@ -1378,7 +1378,19 @@
     }catch(err){
       console.warn('Self-tests fallaron:', err);
     }
-  })();
+  // Cargar datos iniciales al abrir
+loadStore();
+loadRemoteMeta();
+
+// Iniciar el ciclo de escucha "Casi Real Time"
+setInterval(async () => {
+  await pullIfNewer();
+}, POLL_MS);
+
+// Guardar versión inicial si el servidor está vacío
+if(remoteVersion === 0) {
+    schedulePush();
+}
 })();
 </script>
 </body>
