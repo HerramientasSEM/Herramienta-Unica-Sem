@@ -1375,23 +1375,36 @@
       console.assert(Store && Store.meta && typeof Store.meta.turno==='string','Store.meta.turno debe existir');
       console.assert(Store.inyectables && Store.inyectables.SILLAS && Array.isArray(Store.inyectables.SILLAS.meds),'inyectables.SILLAS debe existir');
       console.assert(Store.inyectables && Store.inyectables.TRATAMIENTOS && Array.isArray(Store.inyectables.TRATAMIENTOS.meds),'inyectables.TRATAMIENTOS debe existir');
-    }catch(err){
+  } catch(err) {
       console.warn('Self-tests fallaron:', err);
     }
-  // Cargar datos iniciales al abrir
-loadStore();
-loadRemoteMeta();
 
-// Iniciar el ciclo de escucha "Casi Real Time"
-setInterval(async () => {
-  await pullIfNewer();
-}, POLL_MS);
+    // === INICIALIZACIÓN Y SYNC (Paso 4) ===
+    
+    // 1. Cargamos datos
+    loadStore();
+    loadRemoteMeta();
 
-// Guardar versión inicial si el servidor está vacío
-if(remoteVersion === 0) {
-    schedulePush();
-}
-})();
+    // 2. DIBUJAMOS LA INTERFAZ (Esto hará que reaparezcan las áreas)
+    buildTabs();
+    TimerComponent({mountId: 'pane-SILLAS', areaId: 'SILLAS'});
+    TimerComponent({mountId: 'pane-SILLONES', areaId: 'SILLONES'});
+    TimerComponent({mountId: 'pane-OBSERVACION', areaId: 'OBSERVACION'});
+    TimerComponent({mountId: 'pane-CUNAS', areaId: 'CUNAS'});
+    TimerComponent({mountId: 'pane-TRANSITORIAS', areaId: 'TRANSITORIAS'});
+
+    // 3. Activamos el latido de sincronización
+    setInterval(async () => {
+      console.log("Sincronizando con Google Sheets...");
+      await pullIfNewer();
+    }, POLL_MS);
+
+    // 4. Primer empuje si está vacío
+    if(remoteVersion === 0) {
+        schedulePush();
+    }
+
+  })(); // <--- ESTE ES EL CIERRE DE LA FUNCIÓN PRINCIPAL (Solo debe haber uno)
 </script>
 </body>
 </html>
