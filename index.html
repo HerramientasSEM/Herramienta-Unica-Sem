@@ -59,9 +59,14 @@
     .iny button.decrement{background:#63b3ed;color:#fff}
     .iny button.decrement:hover{background:#4299e1}
 
-    /* Cuadro44 calendar header numbers */
     .c44-scroll{overflow:auto}
     .note{font-size:12px;color:#375585}
+    .statusbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid #dbeafe;background:#eff6ff;color:#0f2647;font-weight:800;font-size:12px}
+    .dot{width:10px;height:10px;border-radius:999px;background:#94a3b8}
+    .dot.ok{background:#16a34a}
+    .dot.warn{background:#f59e0b}
+    .dot.bad{background:#ef4444}
 
     @media (max-width:900px){
       .global-controls{width:100%}
@@ -70,6 +75,8 @@
 
     @media print{header.app,.tabs,.note,.toolbar,.bottom-actions{display:none} header{background:#fff!important;color:#000!important;border-bottom:1px solid #ddd!important}}
   </style>
+
+  <!-- PDF -->
   <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js"></script>
 </head>
@@ -100,52 +107,105 @@
   <div class="wrapper">
     <div class="tabs" id="tabs"></div>
 
-    <!-- HOME -->
     <section id="pane-HOME" class="tab-pane active">
       <div class="sheet">
         <header><h2 style="margin:0">Bienvenido</h2><div>HLA · Emergencias</div></header>
         <div style="padding:22px">
           <h1 style="text-align:center;margin:14px 0 6px">HERRAMIENTAS DE REGISTRO SERVICIO DE EMERGENCIAS HLA</h1>
-          <p style="text-align:center;color:#375585">Usa las pestañas superiores para ingresar registros. Todo queda sincronizado y el Cuadro 44 se llena automáticamente por día.</p>
+          <p style="text-align:center;color:#375585">Usa las pestañas superiores para ingresar registros. Todo queda guardado por mes y el Cuadro 44 se llena automáticamente por día.</p>
           <p class="note">Consejo: antes de iniciar el turno, verifica <b>Turno</b> y <b>Rol</b> en la barra superior.</p>
+          <p class="note">Este build sincroniza con Supabase. Si la sincronización falla, igual funciona en <b>modo local</b> (localStorage).</p>
+          <div class="statusbar">
+            <span class="pill"><span id="sync_dot" class="dot"></span> Sync: <span id="sync_state">iniciando…</span></span>
+            <span class="pill">Mes: <span id="sync_month"></span></span>
+            <span class="pill">Versión: <span id="sync_ver">0</span></span>
+            <button class="btn" id="btn_login">Login</button>
+            <button class="btn ghost" id="btn_logout">Logout</button>
+            <button class="btn ghost" id="btn_test">Test Sync</button>
+          </div>
+          <p class="note"><b>Importante (seguridad):</b> nunca pegues una <b>secret key</b> en GitHub Pages. Solo publishable/anon.</p>
         </div>
       </div>
     </section>
 
-    <!-- SILLAS: Timer + Inyectables(SILLAS→IV) -->
     <section id="pane-SILLAS" class="tab-pane"></section>
-
-    <!-- SILLONES -->
     <section id="pane-SILLONES" class="tab-pane"></section>
-
-    <!-- OBSERVACION -->
     <section id="pane-OBSERVACION" class="tab-pane"></section>
-
-    <!-- CUNAS -->
     <section id="pane-CUNAS" class="tab-pane"></section>
-
-    <!-- TRANSITORIAS -->
     <section id="pane-TRANSITORIAS" class="tab-pane"></section>
-
-    <!-- TRIAGE -->
     <section id="pane-TRIAGE" class="tab-pane"></section>
-
-    <!-- INYECTABLES (→ IM) -->
     <section id="pane-TRATAMIENTOS" class="tab-pane"></section>
-
-    <!-- CUADRO44 (mensual, calculado) -->
     <section id="pane-CUADRO44" class="tab-pane"></section>
-
-    <p class="note">Cada módulo está aislado por IDs con prefijo para evitar choques. El estado se guarda por mes en localStorage.</p>
   </div>
 
 <script>
-(function(){
+(async function(){
   // ==========================
-  // UTILIDADES / STORE GLOBAL
+  // CARGA ROBUSTA DE SUPABASE
   // ==========================
-  const $ = (sel,root=document)=>root.querySelector(sel);
-  const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+  function loadScript(src){
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src=src;
+      s.async=true;
+      s.crossOrigin='anonymous';
+      s.referrerPolicy='no-referrer';
+      s.onload=()=>resolve(src);
+      s.onerror=()=>reject(new Error('No se pudo cargar '+src));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function ensureSupabaseUMD(){
+    if(window.supabase && typeof window.supabase.createClient==='function') return {ok:true, via:'preloaded'};
+    const cdns=[
+      'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+      'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js'
+    ];
+    let lastErr=null;
+    for(const url of cdns){
+      try{
+        await loadScript(url);
+        if(window.supabase && typeof window.supabase.createClient==='function') return {ok:true, via:url};
+      }catch(e){ lastErr=e; }
+    }
+    return {ok:false, error:lastErr?String(lastErr):'Supabase no cargó'};
+  }
+
+  // ==========================
+  // UI helpers
+  // ==========================
+  const $=(sel,root=document)=>root.querySelector(sel);
+  const $$=(sel,root=document)=>Array.from(root.querySelectorAll(sel));
+
+  const dot = $('#sync_dot');
+  const stateEl = $('#sync_state');
+  const monthEl = $('#sync_month');
+  const verEl = $('#sync_ver');
+
+  function setSyncUI(kind,text){
+    if(!dot||!stateEl) return;
+    dot.classList.remove('ok','warn','bad');
+    if(kind==='ok') dot.classList.add('ok');
+    if(kind==='warn') dot.classList.add('warn');
+    if(kind==='bad') dot.classList.add('bad');
+    stateEl.textContent=text;
+  }
+
+  // 1) Cargar Supabase UMD con fallback
+  setSyncUI('warn','cargando supabase…');
+  const supaLoad = await ensureSupabaseUMD();
+  if(!supaLoad.ok){
+    console.error('Supabase no cargó:', supaLoad.error);
+    setSyncUI('bad','sin supabase (modo local)');
+  } else {
+    console.log('Supabase cargó vía:', supaLoad.via);
+    setSyncUI('warn','supabase ok, iniciando…');
+  }
+
+  // ==========================
+  // FECHAS / KEYS
+  // ==========================
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm   = String(today.getMonth()+1).padStart(2,'0');
@@ -153,18 +213,24 @@
   const DATE_KEY = `${yyyy}-${mm}-${dd}`;
   const MONTH_KEY = `${yyyy}-${mm}`;
   const LS_KEY = (k)=>`HLA_STORE_${MONTH_KEY}_${k||''}`;
+  monthEl && (monthEl.textContent = MONTH_KEY);
+
+  function daysInMonth(y,m){return new Date(y, m, 0).getDate();}
+  const DAYS_THIS_MONTH = daysInMonth(yyyy, parseInt(mm,10));
 
   // ==========================
-  // SYNC REMOTO (Google Sheets vía Apps Script)
+  // SUPABASE CONFIG
   // ==========================
-  const API_URL = 'https://script.google.com/macros/s/AKfycbzROGGnIIN8AALZI41xIez113xYjtSNPl1KJx7tz3NUe6Z98pxrLN0ht4JHZbYy5PpZeg/exec';
-  // Exponer para diagnóstico en consola
-  window.__HLA_SYNC__ = window.__HLA_SYNC__ || {};
-  window.__HLA_SYNC__.API_URL = API_URL;
-  const SHARED_KEY = 'HLA123';
-  window.__HLA_SYNC__.SHARED_KEY = SHARED_KEY; // debe coincidir con SHARED_KEY en Apps Script
+  const SUPABASE_URL = "https://mmhthllvewjbuwcsnmxx.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_iQjqNU5nsTELXNxJlMDN2g_OWlu9j_m";
+
+  const hasSupabase = !!(window.supabase && typeof window.supabase.createClient==='function');
+  const supa = hasSupabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+  // ==========================
+  // SYNC (POLL + PUSH)
+  // ==========================
   const POLL_MS = 3000;
-  window.__HLA_SYNC__.POLL_MS = POLL_MS;        // “casi realtime”
   const PUSH_DEBOUNCE_MS = 900;
   const REMOTE_META_KEY = LS_KEY('REMOTE_META');
 
@@ -173,6 +239,181 @@
   let suppressPush = false;
   let pushTimer = null;
 
+  window.__HLA_SYNC__ = window.__HLA_SYNC__ || {};
+  window.__HLA_SYNC__.SUPABASE_URL = SUPABASE_URL;
+  window.__HLA_SYNC__.MONTH_KEY = MONTH_KEY;
+
+  function loadRemoteMeta(){
+    try{
+      const raw = localStorage.getItem(REMOTE_META_KEY);
+      if(!raw) return;
+      const m = JSON.parse(raw);
+      if(m && (m.month_key===MONTH_KEY)){
+        remoteVersion = parseInt(m.version||0,10) || 0;
+        lastPulledAt = m.updated_at || '';
+      }
+    }catch{}
+  }
+
+  function saveRemoteMeta({version, updated_at}){
+    remoteVersion = parseInt(version||0,10) || remoteVersion;
+    lastPulledAt = updated_at || lastPulledAt;
+    verEl && (verEl.textContent = String(remoteVersion||0));
+    try{
+      localStorage.setItem(REMOTE_META_KEY, JSON.stringify({month_key: MONTH_KEY, version: remoteVersion, updated_at: lastPulledAt}));
+    }catch{}
+  }
+
+  async function getSession(){
+    if(!supa) return null;
+    try{
+      const { data: { session } } = await supa.auth.getSession();
+      return session || null;
+    }catch{return null;}
+  }
+
+  async function ensureLoginOnce(){
+    if(!supa) return false;
+    const session = await getSession();
+    if(session) return true;
+
+    // Esperado: Que funcione sin login (modo local). Login es SOLO para poder sync.
+    const email = localStorage.getItem("HLA_LOGIN_EMAIL") || prompt("Email (Supabase Auth):");
+    const password = prompt("Password:");
+    if(!email || !password) return false;
+    localStorage.setItem("HLA_LOGIN_EMAIL", email);
+
+    const { error } = await supa.auth.signInWithPassword({ email, password });
+    if(error){
+      console.error("Login error:", error);
+      return false;
+    }
+    return true;
+  }
+
+  async function logout(){
+    if(!supa) return;
+    try{ await supa.auth.signOut(); }catch{}
+  }
+
+  async function apiGet(){
+    window.__HLA_SYNC__.lastAction = 'GET';
+    if(!supa) return {ok:false, error:'no_supabase'};
+    if(!(await ensureLoginOnce())) return {ok:false, error:'unauthorized'};
+
+    const { data, error } = await supa
+      .from('hla_store')
+      .select('month_key, version, updated_at, json')
+      .eq('month_key', MONTH_KEY)
+      .maybeSingle();
+
+    if(error) return {ok:false, error: error.message};
+    if(!data) return {ok:false, error:'not_found'};
+    return { ok:true, version: data.version||0, updated_at: data.updated_at||'', json: JSON.stringify(data.json||{}) };
+  }
+
+  async function apiPost(jsonStr){
+    window.__HLA_SYNC__.lastAction = 'POST';
+    if(!supa) return {ok:false, error:'no_supabase'};
+    if(!(await ensureLoginOnce())) return {ok:false, error:'unauthorized'};
+
+    const { data: existing, error: e1 } = await supa
+      .from('hla_store')
+      .select('version')
+      .eq('month_key', MONTH_KEY)
+      .maybeSingle();
+
+    if(e1) return {ok:false, error: e1.message};
+
+    const nowIso = new Date().toISOString();
+    const jsonObj = JSON.parse(jsonStr);
+
+    if(!existing){
+      const { data: ins, error: eIns } = await supa
+        .from('hla_store')
+        .insert({ month_key: MONTH_KEY, version: 1, updated_at: nowIso, json: jsonObj })
+        .select('version, updated_at')
+        .single();
+      if(eIns) return {ok:false, error: eIns.message};
+      return {ok:true, version: ins.version, updated_at: ins.updated_at};
+    }
+
+    const newV = (remoteVersion||0) + 1;
+    const { data: upd, error: eUpd } = await supa
+      .from('hla_store')
+      .update({ version: newV, updated_at: nowIso, json: jsonObj })
+      .eq('month_key', MONTH_KEY)
+      .eq('version', remoteVersion||0)
+      .select('version, updated_at')
+      .maybeSingle();
+
+    if(eUpd) return {ok:false, error: eUpd.message};
+    if(!upd) return {ok:false, error:'stale_client'};
+    return {ok:true, version: upd.version, updated_at: upd.updated_at};
+  }
+
+  function softReloadOnce(newV){
+    try{
+      const k = `HLA_SOFT_RELOAD_${MONTH_KEY}`;
+      const last = sessionStorage.getItem(k);
+      if(last === String(newV)) return;
+      sessionStorage.setItem(k, String(newV));
+      location.reload();
+    }catch{}
+  }
+
+  async function pullIfNewer(){
+    if(!supa) return; // sin supabase: modo local
+    window.__HLA_SYNC__.lastPullAttempt = new Date().toISOString();
+    try{
+      const r = await apiGet();
+      if(!r || !r.ok){
+        if(r && r.error==='unauthorized') setSyncUI('warn','local (sin login)');
+        return;
+      }
+      const v = parseInt(r.version||0,10) || 0;
+      if(v > (remoteVersion||0)){
+        applyRemoteStore(r);
+      } else {
+        saveRemoteMeta({version:v, updated_at:r.updated_at});
+        setSyncUI('ok','sincronizado');
+      }
+    }catch(e){
+      console.error('pullIfNewer error:', e);
+      setSyncUI('warn','sync falló (local)');
+    }
+  }
+
+  function schedulePush(){
+    if(!supa) return;
+    if(suppressPush) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(()=>{ pushNow(); }, PUSH_DEBOUNCE_MS);
+  }
+
+  async function pushNow(){
+    if(!supa) return;
+    window.__HLA_SYNC__.lastPushAttempt = new Date().toISOString();
+    if(suppressPush) return;
+    try{
+      const jsonStr = JSON.stringify(compactStoreForRemote());
+      const r = await apiPost(jsonStr);
+      if(!r || !r.ok){
+        if(r && r.error==='stale_client'){ await pullIfNewer(); }
+        if(r && r.error==='unauthorized'){ setSyncUI('warn','local (sin login)'); }
+        return;
+      }
+      saveRemoteMeta({version:r.version, updated_at:r.updated_at});
+      setSyncUI('ok','sincronizado');
+    }catch(e){
+      console.error('pushNow error:', e);
+      setSyncUI('warn','push falló (local)');
+    }
+  }
+
+  // ==========================
+  // DATA / STORE
+  // ==========================
   const PROCEDIMIENTOS_DEF = [
     "Administración de Medicamento Vía Intramuscular",
     "Administracion de medicamentos via intravenosa",
@@ -194,9 +435,6 @@
     "Curación de Quemadura","Curaciones","Frotis y Cultivos","Toma de Muestras"
   ];
 
-  function daysInMonth(y,m){return new Date(y, m, 0).getDate();}
-  const DAYS_THIS_MONTH = daysInMonth(yyyy, parseInt(mm,10));
-
   function baseCuadro44(){
     const obj={};
     PROCEDIMIENTOS_DEF.forEach(p=>{obj[p]=Array(DAYS_THIS_MONTH).fill(0)});
@@ -211,7 +449,8 @@
       SILLAS: { meds:["Dexametasona","Clorfenamina","Buscapina","Cimetidina","Tramal","Voltaren","Plasil","Laxis"], counts:[] },
       TRATAMIENTOS: { meds:["Dexametasona","Clorfenamina","Buscapina","Cimetidina","Tramal","Voltaren","Plasil","Laxis"], counts:[] }
     },
-    cuadro44: baseCuadro44()
+    cuadro44: baseCuadro44(),
+    areaCounters: {}
   };
 
   function turnoKey(){ return Store.meta.turno; }
@@ -238,47 +477,6 @@
     if(!skipRemote) schedulePush();
   }
 
-  function loadRemoteMeta(){
-    window.__HLA_SYNC__.remoteVersion = remoteVersion;
-    window.__HLA_SYNC__.lastPulledAt = lastPulledAt;
-    try{
-      const raw = localStorage.getItem(REMOTE_META_KEY);
-      if(!raw) return;
-      const m = JSON.parse(raw);
-      if(m && (m.month_key===MONTH_KEY)){
-        remoteVersion = parseInt(m.version||0,10) || 0;
-        lastPulledAt = m.updated_at || '';
-      }
-    }catch{}
-  }
-
-  function saveRemoteMeta({version, updated_at}){
-    remoteVersion = parseInt(version||0,10) || remoteVersion;
-    lastPulledAt = updated_at || lastPulledAt;
-    try{
-      localStorage.setItem(REMOTE_META_KEY, JSON.stringify({month_key: MONTH_KEY, version: remoteVersion, updated_at: lastPulledAt}));
-    }catch{}
-  }
-
-  async function apiGet(){
-    window.__HLA_SYNC__.lastAction = 'GET';
-    const url = `${API_URL}?month=${encodeURIComponent(MONTH_KEY)}&k=${encodeURIComponent(SHARED_KEY)}`;
-    const res = await fetch(url, {method:'GET'});
-    return await res.json();
-  }
-
-  async function apiPost(jsonStr){
-    window.__HLA_SYNC__.lastAction = 'POST';
-    const body = new URLSearchParams({
-      month: MONTH_KEY,
-      k: SHARED_KEY,
-      version: String(remoteVersion||0),
-      json: jsonStr
-    });
-    const res = await fetch(API_URL, {method:'POST', body});
-    return await res.json();
-  }
-
   function applyRemoteStore(payload){
     if(!payload || !payload.json) return false;
     let parsed;
@@ -291,22 +489,13 @@
       Object.assign(Store, parsed);
       saveStore({skipRemote:true});
       saveRemoteMeta({version: payload.version, updated_at: payload.updated_at});
+      setSyncUI('ok','actualizado');
     } finally {
       suppressPush = false;
     }
 
     softReloadOnce(payload.version);
     return true;
-  }
-
-  function softReloadOnce(newV){
-    try{
-      const k = `HLA_SOFT_RELOAD_${MONTH_KEY}`;
-      const last = sessionStorage.getItem(k);
-      if(last === String(newV)) return;
-      sessionStorage.setItem(k, String(newV));
-      location.reload();
-    }catch{}
   }
 
   function compactStoreForRemote(){
@@ -329,44 +518,12 @@
     return clone;
   }
 
-  async function pullIfNewer(){
-    window.__HLA_SYNC__.lastPullAttempt = new Date().toISOString();
-    try{
-      const r = await apiGet();
-      if(!r || !r.ok) return;
-      const v = parseInt(r.version||0,10) || 0;
-      if(v > (remoteVersion||0)){
-        applyRemoteStore(r);
-      } else {
-        saveRemoteMeta({version: v, updated_at: r.updated_at});
-      }
-    }catch{}
-  }
-
-  function schedulePush(){
-    if(suppressPush) return;
-    clearTimeout(pushTimer);
-    pushTimer = setTimeout(()=>{ pushNow(); }, PUSH_DEBOUNCE_MS);
-  }
-
-  async function pushNow(){
-    window.__HLA_SYNC__.lastPushAttempt = new Date().toISOString();
-    if(suppressPush) return;
-    try{
-      const jsonStr = JSON.stringify(compactStoreForRemote());
-      const r = await apiPost(jsonStr);
-      if(!r || !r.ok){
-        if(r && r.error==='stale_client'){
-          await pullIfNewer();
-        }
-        return;
-      }
-      saveRemoteMeta({version: r.version, updated_at: r.updated_at});
-    }catch{}
-  }
-
+  // ==========================
+  // CUADRO44 helpers
+  // ==========================
   function normName(name){
-    return (name||'').replaceAll('ó','o').replaceAll('í','i').replaceAll('ú','u').replaceAll('é','e').replaceAll('á','a')
+    return (name||'')
+      .replaceAll('ó','o').replaceAll('í','i').replaceAll('ú','u').replaceAll('é','e').replaceAll('á','a')
       .replaceAll('Ó','O').replaceAll('Í','I').replaceAll('Ú','U').replaceAll('É','E').replaceAll('Á','A');
   }
 
@@ -395,9 +552,9 @@
     saveStore();
   }
 
-  // ---------------
-  // UI – pestañas
-  // ---------------
+  // ==========================
+  // UI – Tabs
+  // ==========================
   const TABS = [
     {id:'HOME', label:'🏠 Home'},
     {id:'SILLAS', label:'🪑 Sillas'},
@@ -411,10 +568,12 @@
   ];
 
   function buildTabs(){
+    const tabsEl = $('#tabs');
+    tabsEl.innerHTML='';
     const frag = document.createDocumentFragment();
     TABS.forEach((t,i)=>{
       const b=document.createElement('button');
-      b.textContent=t.label; b.dataset.pane=`pane-${t.id}`;
+      b.textContent=t.label;
       if(i===0) b.classList.add('active');
       b.addEventListener('click',()=>{
         $$('#tabs button').forEach(x=>x.classList.remove('active'));
@@ -424,13 +583,12 @@
       });
       frag.appendChild(b);
     });
-    $('#tabs').innerHTML = '';
-    $('#tabs').appendChild(frag);
+    tabsEl.appendChild(frag);
   }
 
-  // -----------------
-  // COMPONENTE TIMER
-  // -----------------
+  // ==========================
+  // TIMER
+  // ==========================
   function TimerComponent({mountId, areaId}){
     const mount = document.getElementById(mountId);
     mount.innerHTML = `
@@ -488,7 +646,7 @@
         `</div></td>`;
 
       tr.querySelectorAll('input[type=text]').forEach(inp=>{
-        inp.value = (o[inp.dataset.field] || '').toUpperCase();
+        inp.value = (o[inp.dataset.field]||'');
         inp.addEventListener('input', ()=>{
           inp.value=inp.value.toUpperCase();
           o[inp.dataset.field]=inp.value;
@@ -497,7 +655,6 @@
       });
 
       const el={
-        idx:tr.querySelector('[data-idx]'),
         ingreso:tr.querySelector('[data-ingreso]'),
         salida:tr.querySelector('[data-salida]'),
         timer:tr.querySelector('[data-timer]'),
@@ -518,8 +675,6 @@
           tr.classList.add('active');
           tr.classList.remove('finished');
           el.startBtn.textContent='PAUSA';
-          el.startBtn.classList.remove('start');
-          el.startBtn.classList.add('pause');
           el.chip.textContent='PAUSA';
           el.chip.className='chip pause';
           el.chip.style.display='inline-flex';
@@ -529,8 +684,6 @@
           if(o.lastStart) o.elapsed+=Date.now()-o.lastStart;
           o.lastStart=null;
           el.startBtn.textContent='Iniciar';
-          el.startBtn.classList.remove('pause');
-          el.startBtn.classList.add('start');
           el.chip.style.display='none';
         }
         saveStore();
@@ -554,7 +707,6 @@
         el.chip.style.display='inline-flex';
         el.startBtn.style.display='none';
         el.finishBtn.textContent='EGRESÓ';
-        el.finishBtn.classList.add('finished');
         el.finishBtn.disabled=true;
         el.reanudarBtn.style.display='inline-flex';
         saveStore();
@@ -572,10 +724,7 @@
         el.chip.style.display='none';
         el.startBtn.style.display='inline-flex';
         el.startBtn.textContent='PAUSA';
-        el.startBtn.classList.remove('start');
-        el.startBtn.classList.add('pause');
         el.finishBtn.textContent='Finalizar';
-        el.finishBtn.classList.remove('finished');
         el.finishBtn.disabled=false;
         saveStore();
       });
@@ -588,8 +737,7 @@
     function addRow(){
       const o=createState();
       state.push(o);
-      const tr=createRow(o);
-      tbody.appendChild(tr);
+      tbody.appendChild(createRow(o));
       renderIndexAll();
       saveStore();
     }
@@ -681,16 +829,15 @@
       doc.text('RESUMEN',14,finalY);
       const resumenBody=[["Número total de pacientes",String(totalPatients)],["Tiempo total acumulado",formatMS(totalMs)],["Tiempo promedio por paciente",formatMS(avgMs)]];
       doc.autoTable({ startY:finalY+4, theme:'plain', body:resumenBody, styles:{fontSize:10}, columnStyles:{0:{cellWidth:120},1:{cellWidth:60}} });
-      const fname=`registro_${areaId}_${new Date().toISOString().slice(0,10)}.pdf`;
-      doc.save(fname);
+      doc.save(`registro_${areaId}_${new Date().toISOString().slice(0,10)}.pdf`);
     });
 
     setInterval(updateUI, 500);
   }
 
-  // ------------------------
-  // COMPONENTE INYECTABLES
-  // ------------------------
+  // ==========================
+  // INYECTABLES
+  // ==========================
   function InyComponent({mount, context}){
     const idPrefix = `iny_${context}`;
     const conf = Store.inyectables[context];
@@ -734,17 +881,18 @@
       </tr>`;
     }
 
-    function render(){
-      tbody.innerHTML = conf.meds.map((m,i)=>rowHTML(i,m)).join('');
-      updateTotals();
-    }
-
     function updateTotals(){
-      let t1=0,t2=0,t3=0; conf.counts.forEach((arr)=>{ t1+=arr[0]; t2+=arr[1]; t3+=arr[2]; });
-      const g = t1+t2+t3;
+      let t1=0,t2=0,t3=0;
+      conf.counts.forEach(arr=>{ t1+=arr[0]; t2+=arr[1]; t3+=arr[2]; });
+      const g=t1+t2+t3;
       const set=(id,v)=>{ const n=document.getElementById(id); if(n) n.textContent=String(v); };
       set(`${idPrefix}_t1`,t1); set(`${idPrefix}_t2`,t2); set(`${idPrefix}_t3`,t3); set(`${idPrefix}_tg`,g);
       conf.counts.forEach((arr,i)=>{ const td=document.getElementById(`${idPrefix}_total_${i}`); if(td) td.textContent=String(arr[0]+arr[1]+arr[2]); });
+    }
+
+    function render(){
+      tbody.innerHTML = conf.meds.map((m,i)=>rowHTML(i,m)).join('');
+      updateTotals();
     }
 
     function impactC44(delta){
@@ -756,10 +904,11 @@
     tbody.addEventListener('click',(e)=>{
       const btn = e.target.closest('button');
       if(!btn) return;
-      const i=+btn.getAttribute('data-i'); const t=+btn.getAttribute('data-t');
+      const i=+btn.getAttribute('data-i');
+      const t=+btn.getAttribute('data-t');
       if(Number.isNaN(i)||Number.isNaN(t)) return;
       const inc = btn.classList.contains('increment') ? 1 : -1;
-      conf.counts[i][t-1] = Math.max(0, conf.counts[i][t-1] + inc);
+      conf.counts[i][t-1] = Math.max(0, (conf.counts[i][t-1]||0) + inc);
       impactC44(inc);
       saveStore();
       render();
@@ -768,7 +917,8 @@
     tbody.addEventListener('change',(e)=>{
       const inp = e.target;
       if(!inp || inp.getAttribute('data-kind')!=='num') return;
-      const i=+inp.getAttribute('data-i'); const t=+inp.getAttribute('data-t');
+      const i=+inp.getAttribute('data-i');
+      const t=+inp.getAttribute('data-t');
       if(Number.isNaN(i)||Number.isNaN(t)) return;
       const newVal = Math.max(0, parseInt(inp.value||'0',10) || 0);
       const oldVal = conf.counts[i][t-1] || 0;
@@ -780,33 +930,44 @@
     });
 
     mount.querySelector('[data-f="addMed"]').addEventListener('click',()=>{
-      let name=prompt('Nombre del medicamento a agregar:'); if(!name) return; name=name.trim(); if(!name) return;
-      const exists=conf.meds.some(m=>m.toLowerCase()===name.toLowerCase()); if(exists){ alert('Ese medicamento ya existe.'); return; }
-      conf.meds.push(name); conf.counts.push([0,0,0]); saveStore(); render();
+      let name=prompt('Nombre del medicamento a agregar:');
+      if(!name) return;
+      name=name.trim();
+      if(!name) return;
+      const exists=conf.meds.some(m=>m.toLowerCase()===name.toLowerCase());
+      if(exists){ alert('Ese medicamento ya existe.'); return; }
+      conf.meds.push(name);
+      conf.counts.push([0,0,0]);
+      saveStore();
+      render();
     });
 
     mount.querySelector('[data-f="reset"]').addEventListener('click',()=>{
       if(!confirm('¿Seguro que quieres reiniciar los conteos de hoy?')) return;
-      conf.counts = conf.meds.map(()=>[0,0,0]); saveStore(); render();
+      conf.counts = conf.meds.map(()=>[0,0,0]);
+      saveStore();
+      render();
     });
 
     mount.querySelector('[data-f="exportPDF"]').addEventListener('click',()=>{
-      const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape'});
-      doc.setFontSize(14); doc.text(`Registro de Inyectables – ${context}`,14,14); doc.setFontSize(10); doc.text('Fecha: '+ new Date().toLocaleString(),14,20);
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:'landscape'});
+      doc.setFontSize(14);
+      doc.text(`Registro de Inyectables – ${context}`,14,14);
+      doc.setFontSize(10);
+      doc.text('Fecha: '+ new Date().toLocaleString(),14,20);
       const head=[["Medicamento","I Turno","II Turno","III Turno","Total"]];
       const body = conf.meds.map((m,i)=>[m,conf.counts[i][0],conf.counts[i][1],conf.counts[i][2], conf.counts[i].reduce((a,b)=>a+b,0)]);
       doc.autoTable({ head, body, theme:'grid', startY:26, styles:{fontSize:9,cellPadding:2}, headStyles:{fillColor:[22,94,168],textColor:255}, alternateRowStyles:{fillColor:[240,246,255]} });
-      const fname=`inyectables_${context}_${new Date().toISOString().slice(0,10)}.pdf`; doc.save(fname);
+      doc.save(`inyectables_${context}_${new Date().toISOString().slice(0,10)}.pdf`);
     });
 
     render();
   }
 
-  // -----------------------------------
-  // CONTADORES POR ÁREA (sin timers)
-  // -----------------------------------
-  Store.areaCounters = Store.areaCounters || {};
-
+  // ==========================
+  // AREA COUNTERS
+  // ==========================
   const AREA_PROC_DEF = [
     { label:'Tratamiento IV', maps:[{nombre:'Administracion de medicamentos via intravenosa', mult:1}] },
     { label:'Tratamiento VO', maps:[{nombre:'Administracion de medicamentos via oral', mult:1}] },
@@ -886,7 +1047,8 @@
     }
 
     function updateTotals(){
-      let t1=0,t2=0,t3=0; conf.counts.forEach(arr=>{ t1+=arr[0]; t2+=arr[1]; t3+=arr[2]; });
+      let t1=0,t2=0,t3=0;
+      conf.counts.forEach(arr=>{ t1+=arr[0]; t2+=arr[1]; t3+=arr[2]; });
       const g=t1+t2+t3;
       const set=(id,v)=>{ const n=document.getElementById(id); if(n) n.textContent=String(v); };
       set(`${idPrefix}_t1`,t1); set(`${idPrefix}_t2`,t2); set(`${idPrefix}_t3`,t3); set(`${idPrefix}_tg`,g);
@@ -901,10 +1063,11 @@
     tbody.addEventListener('click',(e)=>{
       const btn=e.target.closest('button');
       if(!btn) return;
-      const i=+btn.getAttribute('data-i'); const t=+btn.getAttribute('data-t');
+      const i=+btn.getAttribute('data-i');
+      const t=+btn.getAttribute('data-t');
       if(Number.isNaN(i)||Number.isNaN(t)) return;
       const inc = btn.classList.contains('increment') ? 1 : -1;
-      conf.counts[i][t-1] = Math.max(0, conf.counts[i][t-1] + inc);
+      conf.counts[i][t-1] = Math.max(0, (conf.counts[i][t-1]||0) + inc);
       impactByRow(i, inc);
       saveStore();
       render();
@@ -913,7 +1076,8 @@
     tbody.addEventListener('change',(e)=>{
       const inp=e.target;
       if(!inp || inp.getAttribute('data-kind')!=='num') return;
-      const i=+inp.getAttribute('data-i'); const t=+inp.getAttribute('data-t');
+      const i=+inp.getAttribute('data-i');
+      const t=+inp.getAttribute('data-t');
       if(Number.isNaN(i)||Number.isNaN(t)) return;
       const newVal = Math.max(0, parseInt(inp.value||'0',10) || 0);
       const oldVal = conf.counts[i][t-1] || 0;
@@ -932,23 +1096,27 @@
     });
 
     mount.querySelector('[data-f="exportPDF"]').addEventListener('click',()=>{
-      const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape'});
-      doc.setFontSize(14); doc.text(`${areaId} – Conteo de Procedimientos`,14,14);
-      doc.setFontSize(10); doc.text('Fecha: '+ new Date().toLocaleString(),14,20);
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:'landscape'});
+      doc.setFontSize(14);
+      doc.text(`${areaId} – Conteo de Procedimientos`,14,14);
+      doc.setFontSize(10);
+      doc.text('Fecha: '+ new Date().toLocaleString(),14,20);
       const head=[["Procedimiento","I Turno","II Turno","III Turno","Total"]];
       const body = conf.items.map((label,i)=>[label,conf.counts[i][0],conf.counts[i][1],conf.counts[i][2], conf.counts[i].reduce((a,b)=>a+b,0)]);
       doc.autoTable({ head, body, theme:'grid', startY:26, styles:{fontSize:9,cellPadding:2}, headStyles:{fillColor:[22,94,168],textColor:255}, alternateRowStyles:{fillColor:[240,246,255]} });
-      const fname=`${areaId.toLowerCase()}_conteo_${new Date().toISOString().slice(0,10)}.pdf`; doc.save(fname);
+      doc.save(`${areaId.toLowerCase()}_conteo_${new Date().toISOString().slice(0,10)}.pdf`);
     });
 
     render();
   }
 
-  // ----------------
-  // TRIAGE COMPONENT
-  // ----------------
+  // ==========================
+  // TRIAGE
+  // ==========================
   const TRIAGE_PROC = [
-    "Toma de Signos Vitales","Curva Febril","Oximetría de Pulso","Toma de Presión Arterial","Medir Frecuencia Cardíaca","Medir Frecuencia Respiratoria","Medidas Antropométricas","Educación"
+    "Toma de Signos Vitales","Curva Febril","Oximetría de Pulso","Toma de Presión Arterial",
+    "Medir Frecuencia Cardíaca","Medir Frecuencia Respiratoria","Medidas Antropométricas","Educación"
   ];
 
   function TriageComponent({mountId}){
@@ -999,7 +1167,7 @@
     }
 
     function renderResumen(){
-      const totals = TRIAGE_PROC.map((_,i)=> Store.triage.T1[i]+Store.triage.T2[i]+Store.triage.T3[i]);
+      const totals = TRIAGE_PROC.map((_,i)=> (Store.triage.T1[i]+Store.triage.T2[i]+Store.triage.T3[i]));
       $resumen.innerHTML = TRIAGE_PROC.map((n,i)=>`<tr><td>${n}</td><td>${totals[i]}</td></tr>`).join('');
     }
 
@@ -1071,16 +1239,15 @@
       const arr = Store.triage[turnoKey()];
       const body = TRIAGE_PROC.map((n,i)=>[n,arr[i]]);
       doc.autoTable({ head, body, theme:'grid', startY:26, styles:{fontSize:9,cellPadding:2}, headStyles:{fillColor:[22,94,168],textColor:255}, alternateRowStyles:{fillColor:[240,246,255]} });
-      const fname=`triage_${turnoKey()}_${new Date().toISOString().slice(0,10)}.pdf`;
-      doc.save(fname);
+      doc.save(`triage_${turnoKey()}_${new Date().toISOString().slice(0,10)}.pdf`);
     });
 
     render();
   }
 
-  // -----------------
-  // CUADRO 44 (vista)
-  // -----------------
+  // ==========================
+  // CUADRO 44 VIEW
+  // ==========================
   function Cuadro44View({mountId}){
     const mount = document.getElementById(mountId);
     mount.innerHTML = `
@@ -1088,7 +1255,6 @@
         <header><h2 style="margin:0">CUADRO 44 – ${MONTH_KEY}</h2>
           <div>
             <button class="btn ghost" data-f="pdf">Exportar PDF</button>
-            <button class="btn" data-f="cerrar">Cerrar día</button>
           </div>
         </header>
         <div class="c44-scroll">
@@ -1107,7 +1273,7 @@
         const arr = Store.cuadro44[proc];
         return `<tr><td>${proc}</td>${arr.map(v=>`<td style="text-align:center">${v}</td>`).join('')}</tr>`;
       }).join('');
-      body.innerHTML = rows || '<tr><td colspan="33" style="text-align:center">Sin datos</td></tr>';
+      body.innerHTML = rows || `<tr><td colspan="${DAYS_THIS_MONTH+1}" style="text-align:center">Sin datos</td></tr>`;
     }
 
     mount.querySelector('[data-f="pdf"]').addEventListener('click',()=>{
@@ -1117,36 +1283,30 @@
       doc.text(`CUADRO 44 – ${MONTH_KEY}`,14,14);
       doc.setFontSize(10);
       doc.text('Generado: '+ new Date().toLocaleString(),14,20);
-      const head=[['Procedimiento', ...Array.from({length:DAYS_THIS_MONTH},(_,i)=>String(i+1))]];
+      const head=[["Procedimiento", ...Array.from({length:DAYS_THIS_MONTH},(_,i)=>String(i+1))]];
       const body = Object.keys(Store.cuadro44).sort().map(proc=>[proc, ...Store.cuadro44[proc]]);
       doc.autoTable({ head, body, theme:'grid', startY:26, styles:{fontSize:8,cellPadding:1}, headStyles:{fillColor:[22,94,168],textColor:255}, alternateRowStyles:{fillColor:[240,246,255]} });
-      const fname=`cuadro44_${MONTH_KEY}.pdf`;
-      doc.save(fname);
-    });
-
-    mount.querySelector('[data-f="cerrar"]').addEventListener('click',()=>{
-      if(!confirm('Esto genera PDFs y prepara el siguiente día (mismo mes). ¿Continuar?')) return;
-      alert('Día cerrado. Continúa registrando en la nueva fecha.');
+      doc.save(`cuadro44_${MONTH_KEY}.pdf`);
     });
 
     renderHead();
     renderBody();
+
     mount._refresh = ()=>{ renderHead(); renderBody(); };
   }
 
-  // ----------------
-  // RENDER PESTAÑAS
-  // ----------------
+  // ==========================
+  // RENDER PANES
+  // ==========================
   function renderSillas(){
     const host = $('#pane-SILLAS');
     host.innerHTML = `
-      <div class="sheet" style="margin-bottom:16px">
-        <header><h2 style="margin:0">SILLAS – Timer</h2><div>Fecha: ${new Date(Store.meta.fechaHoy+'T00:00:00').toLocaleDateString()}</div></header>
-        <div style="padding:12px" id="timer_sillas"></div>
-      </div>
-      <div class="sheet">
-        <header><h2 style="margin:0">SILLAS – Inyectables (cuenta como <i>vía intravenosa</i> en Cuadro 44)</h2><div></div></header>
-        <div style="padding:12px" id="iny_sillas"></div>
+      <div style="display:grid;gap:16px">
+        <div id="timer_sillas"></div>
+        <div class="sheet">
+          <header><h2 style="margin:0">SILLAS – Inyectables (cuenta como <i>vía intravenosa</i> en Cuadro 44)</h2><div></div></header>
+          <div style="padding:12px" id="iny_sillas"></div>
+        </div>
       </div>`;
     TimerComponent({mountId:'timer_sillas', areaId:'SILLAS'});
     InyComponent({mount: $('#iny_sillas'), context:'SILLAS'});
@@ -1162,13 +1322,15 @@
     AreaCounterComponent({mount: document.getElementById(`ac_${id}`), areaId: id});
   }
 
-  function renderTriage(){ TriageComponent({mountId:'pane-TRIAGE'}); }
-  function renderTratamientos(){ InyComponent({mount: $('#pane-TRATAMIENTOS'), context:'TRATAMIENTOS'}); }
-  function renderCuadro(){ Cuadro44View({mountId:'pane-CUADRO44'}); }
+  function renderTratamientos(){
+    const host = $('#pane-TRATAMIENTOS');
+    host.innerHTML = `<div class="sheet"><header><h2 style="margin:0">INYECTABLES</h2><div></div></header><div style="padding:12px" id="iny_trat"></div></div>`;
+    InyComponent({mount: document.getElementById('iny_trat'), context:'TRATAMIENTOS'});
+  }
 
-  // ------------------------
+  // ==========================
   // GLOBAL CONTROLS
-  // ------------------------
+  // ==========================
   function updateGC(){
     $('#gc_fecha').textContent = new Date(Store.meta.fechaHoy+'T00:00:00').toLocaleDateString();
     $('#gc_turno').value = Store.meta.turno;
@@ -1177,8 +1339,8 @@
     if(pane && pane._refresh) pane._refresh();
   }
 
-  $('#gc_turno').addEventListener('change', (e)=>{ Store.meta.turno=e.target.value; saveStore(); });
-  $('#gc_rol').addEventListener('change', (e)=>{ Store.meta.rol=e.target.value; saveStore(); });
+  $('#gc_turno').addEventListener('change',(e)=>{ Store.meta.turno=e.target.value; saveStore(); });
+  $('#gc_rol').addEventListener('change',(e)=>{ Store.meta.rol=e.target.value; saveStore(); });
 
   setInterval(()=>{
     const now = new Date();
@@ -1190,54 +1352,111 @@
     }
   }, 60_000);
 
-  // -------------
+  // ==========================
   // BOOTSTRAP APP
-  // -------------
+  // ==========================
+  function ensureMeds(){
+    const desired=["Dexametasona","Clorfenamina","Buscapina","Cimetidina","Tramal","Voltaren","Plasil","Laxis"];
+    const fix=(ctx)=>{
+      const conf=Store.inyectables[ctx];
+      const same = conf.meds.length===desired.length && conf.meds.every((m,i)=>m===desired[i]);
+      if(!same){ conf.meds = desired.slice(); conf.counts = desired.map(()=>[0,0,0]); }
+      if(!conf.counts || conf.counts.length!==desired.length){ conf.counts = desired.map(()=>[0,0,0]); }
+    };
+    fix('TRATAMIENTOS');
+    fix('SILLAS');
+  }
+
   loadRemoteMeta();
   loadStore();
-
-  (function ensureMeds(){
-    const desired=["Dexametasona","Clorfenamina","Buscapina","Cimetidina","Tramal","Voltaren","Plasil","Laxis"];
-    const curT=Store.inyectables?.TRATAMIENTOS?.meds||[];
-    const sameT = curT.length===desired.length && curT.every((m,i)=>m===desired[i]);
-    if(!sameT){
-      Store.inyectables.TRATAMIENTOS.meds = desired.slice();
-      Store.inyectables.TRATAMIENTOS.counts = desired.map(()=>[0,0,0]);
-    }
-    const curS=Store.inyectables?.SILLAS?.meds||[];
-    const sameS = curS.length===desired.length && curS.every((m,i)=>m===desired[i]);
-    if(!sameS){
-      Store.inyectables.SILLAS.meds = desired.slice();
-      if(!Store.inyectables.SILLAS.counts || Store.inyectables.SILLAS.counts.length!==desired.length){
-        Store.inyectables.SILLAS.counts = desired.map(()=>[0,0,0]);
-      }
-    }
-    saveStore({skipRemote:true});
-  })();
+  ensureMeds();
 
   buildTabs();
   updateGC();
-
-  // Primer pull remoto (no bloquea la UI)
-  pullIfNewer();
-  // Polling para “casi tiempo real”
-  setInterval(pullIfNewer, POLL_MS);
 
   renderSillas();
   renderAreaCountersOnly('SILLONES');
   renderAreaCountersOnly('OBSERVACION');
   renderAreaCountersOnly('CUNAS');
   renderAreaCountersOnly('TRANSITORIAS');
-  renderTriage();
+  TriageComponent({mountId:'pane-TRIAGE'});
   renderTratamientos();
-  renderCuadro();
+  Cuadro44View({mountId:'pane-CUADRO44'});
+
+  // UI login buttons
+  $('#btn_login')?.addEventListener('click', async ()=>{
+    const ok = await ensureLoginOnce();
+    setSyncUI(ok?'ok':'warn', ok?'login ok':'sin login (local)');
+    if(ok) await pullIfNewer();
+  });
+
+  $('#btn_logout')?.addEventListener('click', async ()=>{
+    await logout();
+    setSyncUI('warn','logout (local)');
+  });
+
+  $('#btn_test')?.addEventListener('click', async ()=>{ await window.__HLA_TESTS__?.run(); });
+
+  // Primer pull + polling
+  if(supa){
+    verEl && (verEl.textContent = String(remoteVersion||0));
+    pullIfNewer();
+    setInterval(pullIfNewer, POLL_MS);
+  } else {
+    verEl && (verEl.textContent = String(remoteVersion||0));
+  }
 
   window.addEventListener('beforeunload',(e)=>{
     const running = Object.values(Store.timers).some(arr=>arr.some(o=>o.running&&!o.finalized));
     if(running){ e.preventDefault(); e.returnValue=''; }
   });
 
-})(); // ✅ cierre correcto del IIFE principal
+  // ==========================
+  // SELF-TESTS (consola)
+  // ==========================
+  // Ejecuta en consola: __HLA_TESTS__.run()
+  // Agregamos tests adicionales: carga supabase + escritura/lectura (si hay login)
+  window.__HLA_TESTS__ = {
+    async run(){
+      const out = {
+        supabaseLoaded: !!window.supabase,
+        canCreateClient: (typeof window.supabase?.createClient==='function'),
+        hasSupaClient: !!supa,
+        month: MONTH_KEY,
+        localStoreSize: (localStorage.getItem(LS_KEY('STORE'))||'').length
+      };
+      try{
+        if(!supa){
+          out.sync = 'skipped (no supabase)';
+          console.table(out);
+          return out;
+        }
+        const okLogin = await ensureLoginOnce();
+        out.login = okLogin;
+        if(okLogin){
+          const r = await apiGet();
+          out.apiGet = r.ok ? 'ok' : ('fail: '+(r.error||''));
+          // mini write test (NO cambia tu Store): solo intenta postear lo que ya hay.
+          const r2 = await apiPost(JSON.stringify(compactStoreForRemote()));
+          out.apiPost = r2.ok ? 'ok' : ('fail: '+(r2.error||''));
+        }
+      }catch(e){
+        out.error = String(e);
+      }
+      console.table(out);
+      return out;
+    }
+  };
+
+  // Estado inicial
+  if(!supa){
+    setSyncUI('warn','modo local');
+  } else {
+    const sess = await getSession();
+    setSyncUI(sess?'ok':'warn', sess?'sincronizado':'local (sin login)');
+  }
+
+})();
 </script>
 </body>
 </html>
